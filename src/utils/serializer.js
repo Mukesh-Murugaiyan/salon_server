@@ -17,6 +17,8 @@ const toSafeUser = (user) => {
         id: user.salonId._id.toString(),
         name: user.salonId.name,
         code: user.salonId.code,
+        openingTime: user.salonId.openingTime || '09:00',
+        closingTime: user.salonId.closingTime || '20:00',
       }
     : salonId;
 

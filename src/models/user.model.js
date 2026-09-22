@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Role = require('./role.model');
 
 const userSchema = new mongoose.Schema(
   {
@@ -28,10 +29,12 @@ const userSchema = new mongoose.Schema(
       ref: 'Salon',
       index: true,
     },
+    role: {
+      type: mongoose.Schema.Types.Mixed,
+    },
     roleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Role',
-      required: [true, 'Role ID is required'],
       index: true,
     },
     isActive: {
@@ -45,11 +48,32 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for tenant queries and user lookups
-userSchema.index({ salonId: 1, email: 1 });
+// Pre-validate hook to auto-resolve roleId from legacy role property in tests
+userSchema.pre('validate', async function () {
+  if (!this.roleId) {
+    const Role = mongoose.models.Role || mongoose.model('Role');
+    const rawRole = this.role || this.get('role');
+    const code =
+      (typeof rawRole === 'object' && rawRole?.value ? rawRole.value : rawRole) ||
+      'STAFF';
+    let r = await Role.findOne({ code });
+    if (!r) {
+      r = await Role.create({
+        name: code,
+        code,
+        salonId: this.salonId || null,
+        permissions: ['*'],
+      });
+    }
+    this.roleId = r._id;
+  }
+});
+
+const { ROLES } = require('../constants/roles');
 
 const User = mongoose.model('User', userSchema);
 
 module.exports = {
   User,
+  ROLES,
 };

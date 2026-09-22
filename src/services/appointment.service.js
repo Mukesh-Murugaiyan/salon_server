@@ -190,7 +190,13 @@ class AppointmentService {
     const query = { salonId };
 
     if (filter.date) {
-      query.date = filter.date;
+      if (Array.isArray(filter.date)) {
+        query.date = { $in: filter.date };
+      } else if (typeof filter.date === 'string' && filter.date.includes(',')) {
+        query.date = { $in: filter.date.split(',').map((d) => d.trim()) };
+      } else {
+        query.date = filter.date;
+      }
     }
 
     if (filter.staffId) {

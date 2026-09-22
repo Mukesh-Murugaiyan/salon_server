@@ -89,6 +89,11 @@ const salonSchema = new mongoose.Schema(
 );
 
 salonSchema.pre('validate', function () {
+  if (!this.code) {
+    const baseCode = (this.name || 'SALON').replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+    this.code = baseCode || 'SALON';
+  }
+
   if (this.openingTime && this.closingTime) {
     const [openH, openM] = this.openingTime.split(':').map(Number);
     const [closeH, closeM] = this.closingTime.split(':').map(Number);

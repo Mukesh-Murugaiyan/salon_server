@@ -1,33 +1,9 @@
 const Attendance = require('../models/attendance.model');
 const Salon = require('../models/salon.model');
-
-/**
- * Calculates great-circle distance between two points on a sphere using the Haversine formula.
- * @param {number} lat1 - Latitude of point 1 (in decimal degrees)
- * @param {number} lon1 - Longitude of point 1 (in decimal degrees)
- * @param {number} lat2 - Latitude of point 2 (in decimal degrees)
- * @param {number} lon2 - Longitude of point 2 (in decimal degrees)
- * @returns {number} Distance in meters rounded to 2 decimal places
- */
-const calculateHaversineDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371000; // Earth radius in meters
-  const toRad = (deg) => (deg * Math.PI) / 180;
-
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c;
-
-  return Math.round(distance * 100) / 100;
-};
+const NumberUtils = require('../utils/NumberUtils');
+const Validation = require('../utils/Validation');
+const DateTime = require('../utils/DateTime');
+const AppConfig = require('../config/AppConfig');
 
 class AttendanceService {
   /**
@@ -42,15 +18,8 @@ class AttendanceService {
    */
   async checkIn({ salonId, userId, latitude, longitude }) {
     // 1. Validate latitude and longitude coordinates
-    if (
-      latitude === undefined ||
-      latitude === null ||
-      longitude === undefined ||
-      longitude === null ||
-      latitude === '' ||
-      longitude === ''
-    ) {
-      const error = new Error('Coordinates are required.');
+    if (!Validation.isValidCoordinates(latitude, longitude)) {
+      const error = new Error('Coordinates are required and must be valid numeric coordinates.');
       error.status = 400;
       error.code = 'VALIDATION_ERROR';
       throw error;
@@ -78,7 +47,7 @@ class AttendanceService {
     }
 
     // 3. Check for existing check-in on the same date (YYYY-MM-DD)
-    const todayDate = new Date().toISOString().slice(0, 10);
+    const todayDate = DateTime.getTodayUtcDateString();
     const existingAttendance = await Attendance.findOne({
       salonId,
       userId,
@@ -93,14 +62,14 @@ class AttendanceService {
     }
 
     // 4. Calculate distance using server-side Haversine formula
-    const distance = calculateHaversineDistance(
+    const distance = NumberUtils.calculateDistance(
       salon.latitude,
       salon.longitude,
       latitude,
       longitude
     );
 
-    const allowedRadius = salon.allowedRadiusInMeters || 100;
+    const allowedRadius = salon.allowedRadiusInMeters || AppConfig.GEOFENCING.DEFAULT_ALLOWED_RADIUS_METERS;
 
     // 5. Enforce geo-fencing: reject if out of permitted radius
     if (distance > allowedRadius) {

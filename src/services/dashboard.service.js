@@ -3,6 +3,8 @@ const Client = require('../models/client.model');
 const Staff = require('../models/staff.model');
 const Salon = require('../models/salon.model');
 const { User } = require('../models/user.model');
+const DateTime = require('../utils/DateTime');
+const AppConfig = require('../config/AppConfig');
 
 class DashboardService {
   /**
@@ -16,9 +18,8 @@ class DashboardService {
     const tenantId = user?.salonId;
 
     // Build today's date strings in both UTC and local time to match string-formatted dates
-    const todayUTC = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayUTC = DateTime.getTodayUtcDateString();
+    const todayLocal = DateTime.getTodayLocalDateString();
     const todayDates = Array.from(new Set([todayUTC, todayLocal]));
 
     if (!tenantId) {
@@ -95,11 +96,13 @@ class DashboardService {
         isActive: true,
       }),
       // Fetch salon details
-      Salon.findById(tenantId).select('subscriptionStatus name code'),
+      Salon.findById(tenantId).select('subscriptionStatus name code openingTime closingTime'),
     ]);
 
     const entityName = salon?.name || user?.salon?.name || 'My Salon';
     const subscriptionStatus = salon?.subscriptionStatus || 'ACTIVE';
+    const openingTime = salon?.openingTime || user?.salon?.openingTime || '09:00';
+    const closingTime = salon?.closingTime || user?.salon?.closingTime || '20:00';
 
     return {
       todayAppointments,
@@ -109,6 +112,8 @@ class DashboardService {
       userCount,
       subscriptionStatus,
       salonName: entityName,
+      openingTime,
+      closingTime,
     };
   }
 }
