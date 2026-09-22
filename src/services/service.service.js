@@ -2,15 +2,15 @@ const Service = require('../models/service.model');
 
 class ServiceService {
   /**
-   * Lists services strictly belonging to the authenticated company.
+   * Lists services strictly belonging to the authenticated salon.
    * Supports search (by name or description) and status filtering.
    *
-   * @param {string} companyId - Authoritative companyId
+   * @param {string} salonId - Authoritative salonId
    * @param {Object} [filter={}]
    * @returns {Promise<Array<Object>>}
    */
-  async listServices(companyId, filter = {}) {
-    const query = { companyId };
+  async listServices(salonId, filter = {}) {
+    const query = { salonId };
 
     if (filter.isActive !== undefined && filter.isActive !== 'all') {
       query.isActive = filter.isActive === 'true' || filter.isActive === true;
@@ -40,16 +40,16 @@ class ServiceService {
   }
 
   /**
-   * Retrieves single service by ID strictly within company boundaries.
+   * Retrieves single service by ID strictly within salon boundaries.
    *
    * @param {string} serviceId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async getServiceById(serviceId, companyId) {
-    const service = await Service.findOne({ _id: serviceId, companyId });
+  async getServiceById(serviceId, salonId) {
+    const service = await Service.findOne({ _id: serviceId, salonId });
     if (!service) {
-      const err = new Error('Service not found or does not belong to your company.');
+      const err = new Error('Service not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'SERVICE_NOT_FOUND';
       throw err;
@@ -69,13 +69,13 @@ class ServiceService {
   }
 
   /**
-   * Creates a new service record for the company.
+   * Creates a new service record for the salon.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} data
    * @returns {Promise<Object>}
    */
-  async createService(companyId, data) {
+  async createService(salonId, data) {
     const name = (data.name || '').trim();
     const description = (data.description || '').trim();
     const durationInMinutes = Number(data.durationInMinutes);
@@ -103,23 +103,23 @@ class ServiceService {
       throw err;
     }
 
-    // Check for duplicate active service name within this company (case-insensitive)
+    // Check for duplicate active service name within this salon (case-insensitive)
     const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const existing = await Service.findOne({
-      companyId,
+      salonId,
       name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
       isActive: true,
     });
 
     if (existing) {
-      const err = new Error(`An active service with the name '${name}' already exists in your company.`);
+      const err = new Error(`An active service with the name '${name}' already exists in your salon.`);
       err.status = 409;
       err.code = 'SERVICE_EXISTS';
       throw err;
     }
 
     const service = await Service.create({
-      companyId,
+      salonId,
       name,
       description,
       durationInMinutes,
@@ -144,14 +144,14 @@ class ServiceService {
    * Updates an existing service record within tenant boundaries.
    *
    * @param {string} serviceId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} data
    * @returns {Promise<Object>}
    */
-  async updateService(serviceId, companyId, data) {
-    const service = await Service.findOne({ _id: serviceId, companyId });
+  async updateService(serviceId, salonId, data) {
+    const service = await Service.findOne({ _id: serviceId, salonId });
     if (!service) {
-      const err = new Error('Service not found or does not belong to your company.');
+      const err = new Error('Service not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'SERVICE_NOT_FOUND';
       throw err;
@@ -172,14 +172,14 @@ class ServiceService {
       if (targetIsActive) {
         const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const existing = await Service.findOne({
-          companyId,
+          salonId,
           _id: { $ne: serviceId },
           name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
           isActive: true,
         });
 
         if (existing) {
-          const err = new Error(`An active service with the name '${name}' already exists in your company.`);
+          const err = new Error(`An active service with the name '${name}' already exists in your salon.`);
           err.status = 409;
           err.code = 'SERVICE_EXISTS';
           throw err;
@@ -221,13 +221,13 @@ class ServiceService {
       if (!service.isActive && newIsActive) {
         const escapedName = service.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const existing = await Service.findOne({
-          companyId,
+          salonId,
           _id: { $ne: serviceId },
           name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
           isActive: true,
         });
         if (existing) {
-          const err = new Error(`An active service with the name '${service.name}' already exists in your company.`);
+          const err = new Error(`An active service with the name '${service.name}' already exists in your salon.`);
           err.status = 409;
           err.code = 'SERVICE_EXISTS';
           throw err;
@@ -255,13 +255,13 @@ class ServiceService {
    * Soft deletes a service record by marking isActive = false.
    *
    * @param {string} serviceId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async deleteService(serviceId, companyId) {
-    const service = await Service.findOne({ _id: serviceId, companyId });
+  async deleteService(serviceId, salonId) {
+    const service = await Service.findOne({ _id: serviceId, salonId });
     if (!service) {
-      const err = new Error('Service not found or does not belong to your company.');
+      const err = new Error('Service not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'SERVICE_NOT_FOUND';
       throw err;
@@ -283,13 +283,13 @@ class ServiceService {
    * Toggles the active status of a service.
    *
    * @param {string} serviceId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async toggleStatus(serviceId, companyId) {
-    const service = await Service.findOne({ _id: serviceId, companyId });
+  async toggleStatus(serviceId, salonId) {
+    const service = await Service.findOne({ _id: serviceId, salonId });
     if (!service) {
-      const err = new Error('Service not found or does not belong to your company.');
+      const err = new Error('Service not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'SERVICE_NOT_FOUND';
       throw err;
@@ -301,14 +301,14 @@ class ServiceService {
     if (nextState) {
       const escapedName = service.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const existing = await Service.findOne({
-        companyId,
+        salonId,
         _id: { $ne: serviceId },
         name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
         isActive: true,
       });
 
       if (existing) {
-        const err = new Error(`An active service with the name '${service.name}' already exists in your company.`);
+        const err = new Error(`An active service with the name '${service.name}' already exists in your salon.`);
         err.status = 409;
         err.code = 'SERVICE_EXISTS';
         throw err;

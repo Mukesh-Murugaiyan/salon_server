@@ -2,10 +2,9 @@ const mongoose = require('mongoose');
 
 const roleSchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required for a role'],
+      ref: 'Salon',
       index: true,
     },
     name: {
@@ -44,7 +43,6 @@ const roleSchema = new mongoose.Schema(
   }
 );
 
-// Enforce unique role code within a specific company
-roleSchema.index({ companyId: 1, code: 1 }, { unique: true });
+roleSchema.index({ salonId: 1, code: 1 }, { unique: true });
 
 module.exports = mongoose.model('Role', roleSchema);

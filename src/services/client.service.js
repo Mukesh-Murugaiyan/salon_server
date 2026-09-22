@@ -2,15 +2,15 @@ const Client = require('../models/client.model');
 
 class ClientService {
   /**
-   * Lists clients strictly belonging to the authenticated company.
+   * Lists clients strictly belonging to the authenticated salon.
    * Supports search (by name, phone, or email) and active status filtering.
    *
-   * @param {string} companyId - Authoritative companyId
+   * @param {string} salonId - Authoritative salonId
    * @param {Object} [filter={}]
    * @returns {Promise<Array<Object>>}
    */
-  async listClients(companyId, filter = {}) {
-    const query = { companyId };
+  async listClients(salonId, filter = {}) {
+    const query = { salonId };
 
     if (filter.isActive !== undefined && filter.isActive !== 'all') {
       query.isActive = filter.isActive === 'true' || filter.isActive === true;
@@ -43,16 +43,16 @@ class ClientService {
   }
 
   /**
-   * Retrieves single client by ID strictly within company boundaries.
+   * Retrieves single client by ID strictly within salon boundaries.
    *
    * @param {string} clientId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async getClientById(clientId, companyId) {
-    const client = await Client.findOne({ _id: clientId, companyId });
+  async getClientById(clientId, salonId) {
+    const client = await Client.findOne({ _id: clientId, salonId });
     if (!client) {
-      const err = new Error('Client not found or does not belong to your company.');
+      const err = new Error('Client not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'CLIENT_NOT_FOUND';
       throw err;
@@ -74,13 +74,13 @@ class ClientService {
   }
 
   /**
-   * Provisions a new client record strictly in the authenticated company.
+   * Provisions a new client record strictly in the authenticated salon.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} data
    * @returns {Promise<Object>}
    */
-  async createClient(companyId, data) {
+  async createClient(salonId, data) {
     const name = (data.name || '').trim();
     const phone = (data.phone || '').trim();
     const email = (data.email || '').trim().toLowerCase();
@@ -103,17 +103,17 @@ class ClientService {
       throw err;
     }
 
-    // Check duplicate phone within this company
-    const existingClient = await Client.findOne({ companyId, phone });
+    // Check duplicate phone within this salon
+    const existingClient = await Client.findOne({ salonId, phone });
     if (existingClient) {
-      const err = new Error(`A client with phone '${phone}' already exists in your company directory.`);
+      const err = new Error(`A client with phone '${phone}' already exists in your salon directory.`);
       err.status = 409;
       err.code = 'PHONE_EXISTS';
       throw err;
     }
 
     const client = await Client.create({
-      companyId,
+      salonId,
       name,
       phone,
       email,
@@ -137,17 +137,17 @@ class ClientService {
   }
 
   /**
-   * Updates an existing client with duplicate phone validation and company isolation.
+   * Updates an existing client with duplicate phone validation and salon isolation.
    *
    * @param {string} clientId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} updateData
    * @returns {Promise<Object>}
    */
-  async updateClient(clientId, companyId, updateData) {
-    const client = await Client.findOne({ _id: clientId, companyId });
+  async updateClient(clientId, salonId, updateData) {
+    const client = await Client.findOne({ _id: clientId, salonId });
     if (!client) {
-      const err = new Error('Client not found or does not belong to your company.');
+      const err = new Error('Client not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'CLIENT_NOT_FOUND';
       throw err;
@@ -173,9 +173,9 @@ class ClientService {
         throw err;
       }
       if (phone !== client.phone) {
-        const existing = await Client.findOne({ companyId, phone });
+        const existing = await Client.findOne({ salonId, phone });
         if (existing) {
-          const err = new Error(`A client with phone '${phone}' already exists in your company directory.`);
+          const err = new Error(`A client with phone '${phone}' already exists in your salon directory.`);
           err.status = 409;
           err.code = 'PHONE_EXISTS';
           throw err;
@@ -223,13 +223,13 @@ class ClientService {
    * Performs soft deletion by marking the client as inactive.
    *
    * @param {string} clientId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async deleteClient(clientId, companyId) {
-    const client = await Client.findOne({ _id: clientId, companyId });
+  async deleteClient(clientId, salonId) {
+    const client = await Client.findOne({ _id: clientId, salonId });
     if (!client) {
-      const err = new Error('Client not found or does not belong to your company.');
+      const err = new Error('Client not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'CLIENT_NOT_FOUND';
       throw err;
@@ -252,12 +252,12 @@ class ClientService {
    * Toggles client active/inactive status.
    *
    * @param {string} clientId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {boolean} isActive
    * @returns {Promise<Object>}
    */
-  async toggleStatus(clientId, companyId, isActive) {
-    return this.updateClient(clientId, companyId, { isActive });
+  async toggleStatus(clientId, salonId, isActive) {
+    return this.updateClient(clientId, salonId, { isActive });
   }
 }
 

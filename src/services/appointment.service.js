@@ -11,26 +11,27 @@ const {
   minutesToTime,
 } = require('../constants/appointment.constants');
 
+
 class AppointmentService {
   /**
-   * Validates cross-entity company isolation and active status for Client, Staff, and Service.
+   * Validates cross-entity salon isolation and active status for Client, Staff, and Service.
    *
    * @private
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {string} clientId
    * @param {string} staffId
    * @param {string} serviceId
    * @returns {Promise<{ client: Object, staff: Object, service: Object }>}
    */
-  async _validateEntities(companyId, clientId, staffId, serviceId) {
+  async _validateEntities(salonId, clientId, staffId, serviceId) {
     const [client, staff, service] = await Promise.all([
-      Client.findOne({ _id: clientId, companyId }),
-      Staff.findOne({ _id: staffId, companyId }),
-      Service.findOne({ _id: serviceId, companyId }),
+      Client.findOne({ _id: clientId, salonId }),
+      Staff.findOne({ _id: staffId, salonId }),
+      Service.findOne({ _id: serviceId, salonId }),
     ]);
 
     if (!client) {
-      const err = new Error('Client not found or does not belong to your company.');
+      const err = new Error('Client not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'CLIENT_NOT_FOUND';
       throw err;
@@ -43,7 +44,7 @@ class AppointmentService {
     }
 
     if (!staff) {
-      const err = new Error('Staff member not found or does not belong to your company.');
+      const err = new Error('Staff member not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'STAFF_NOT_FOUND';
       throw err;
@@ -56,7 +57,7 @@ class AppointmentService {
     }
 
     if (!service) {
-      const err = new Error('Service not found or does not belong to your company.');
+      const err = new Error('Service not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'SERVICE_NOT_FOUND';
       throw err;
@@ -136,16 +137,16 @@ class AppointmentService {
    * Cancelled appointments are strictly excluded.
    *
    * @private
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {string} staffId
    * @param {string} date
    * @param {string} startTime
    * @param {string} endTime
    * @param {string} [excludeAppointmentId=null]
    */
-  async _checkStaffOverlap(companyId, staffId, date, startTime, endTime, excludeAppointmentId = null) {
+  async _checkStaffOverlap(salonId, staffId, date, startTime, endTime, excludeAppointmentId = null) {
     const query = {
-      companyId,
+      salonId,
       staffId,
       date,
       status: { $ne: APPOINTMENT_STATUS.CANCELLED },
@@ -176,14 +177,14 @@ class AppointmentService {
   }
 
   /**
-   * Lists appointments scoped to company with optional filtering.
+   * Lists appointments scoped to salon with optional filtering.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} [filter={}]
    * @returns {Promise<Array<Object>>}
    */
-  async listAppointments(companyId, filter = {}) {
-    const query = { companyId };
+  async listAppointments(salonId, filter = {}) {
+    const query = { salonId };
 
     if (filter.date) {
       query.date = filter.date;
@@ -210,7 +211,7 @@ class AppointmentService {
     return appointments.map((a) => ({
       id: a._id.toString(),
       _id: a._id.toString(),
-      companyId: a.companyId,
+      salonId: a.salonId,
       date: a.date,
       startTime: a.startTime,
       endTime: a.endTime,
@@ -249,20 +250,20 @@ class AppointmentService {
   }
 
   /**
-   * Retrieves single appointment by ID within company boundary.
+   * Retrieves single appointment by ID within salon boundary.
    *
    * @param {string} appointmentId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async getAppointmentById(appointmentId, companyId) {
-    const app = await Appointment.findOne({ _id: appointmentId, companyId })
+  async getAppointmentById(appointmentId, salonId) {
+    const app = await Appointment.findOne({ _id: appointmentId, salonId })
       .populate('clientId', 'name phone email')
       .populate('staffId', 'name title specialization')
       .populate('serviceId', 'name durationInMinutes price');
 
     if (!app) {
-      const err = new Error('Appointment not found or does not belong to your company.');
+      const err = new Error('Appointment not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'APPOINTMENT_NOT_FOUND';
       throw err;
@@ -271,7 +272,7 @@ class AppointmentService {
     return {
       id: app._id.toString(),
       _id: app._id.toString(),
-      companyId: app.companyId,
+      salonId: app.salonId,
       date: app.date,
       startTime: app.startTime,
       endTime: app.endTime,
@@ -312,11 +313,11 @@ class AppointmentService {
   /**
    * Schedules a new appointment.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} data
    * @returns {Promise<Object>}
    */
-  async createAppointment(companyId, data) {
+  async createAppointment(salonId, data) {
     const { clientId, staffId, serviceId, date, startTime, endTime, notes, status } = data;
 
     if (!clientId || !staffId || !serviceId || !date || !startTime) {
@@ -327,16 +328,16 @@ class AppointmentService {
     }
 
     // 0. Enforce active subscription and appointment quota limit
-    await subscriptionService.validateAppointmentLimit(companyId);
+    await subscriptionService.validateAppointmentLimit(salonId);
 
     // 1. Verify cross-entity tenant isolation and active status
-    const { client, staff, service } = await this._validateEntities(companyId, clientId, staffId, serviceId);
+    const { client, staff, service } = await this._validateEntities(salonId, clientId, staffId, serviceId);
 
     // 2. Validate timing and business hours
     const timing = this._validateTiming(startTime, endTime, service.durationInMinutes);
 
     // 3. Prevent overlapping active bookings for this staff member
-    await this._checkStaffOverlap(companyId, staffId, date, timing.startTime, timing.endTime);
+    await this._checkStaffOverlap(salonId, staffId, date, timing.startTime, timing.endTime);
 
     // 4. Validate initial status
     const appStatus = status ? status.toUpperCase() : APPOINTMENT_STATUS.CONFIRMED;
@@ -349,7 +350,7 @@ class AppointmentService {
 
     // 5. Create appointment
     const appointment = await Appointment.create({
-      companyId,
+      salonId,
       clientId,
       staffId,
       serviceId,
@@ -360,21 +361,21 @@ class AppointmentService {
       notes: (notes || '').trim(),
     });
 
-    return this.getAppointmentById(appointment._id, companyId);
+    return this.getAppointmentById(appointment._id, salonId);
   }
 
   /**
    * Updates an existing appointment.
    *
    * @param {string} appointmentId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} data
    * @returns {Promise<Object>}
    */
-  async updateAppointment(appointmentId, companyId, data) {
-    const appointment = await Appointment.findOne({ _id: appointmentId, companyId });
+  async updateAppointment(appointmentId, salonId, data) {
+    const appointment = await Appointment.findOne({ _id: appointmentId, salonId });
     if (!appointment) {
-      const err = new Error('Appointment not found or does not belong to your company.');
+      const err = new Error('Appointment not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'APPOINTMENT_NOT_FOUND';
       throw err;
@@ -388,7 +389,7 @@ class AppointmentService {
     const requestedEndTime = data.endTime;
 
     // 1. Validate entities
-    const { service } = await this._validateEntities(companyId, clientId, staffId, serviceId);
+    const { service } = await this._validateEntities(salonId, clientId, staffId, serviceId);
 
     // 2. Validate timing
     const timing = this._validateTiming(startTime, requestedEndTime, service.durationInMinutes);
@@ -397,7 +398,7 @@ class AppointmentService {
     const targetStatus = data.status ? data.status.toUpperCase() : appointment.status;
     if (targetStatus !== APPOINTMENT_STATUS.CANCELLED) {
       await this._checkStaffOverlap(
-        companyId,
+        salonId,
         staffId,
         date,
         timing.startTime,
@@ -429,7 +430,7 @@ class AppointmentService {
 
     await appointment.save();
 
-    return this.getAppointmentById(appointmentId, companyId);
+    return this.getAppointmentById(appointmentId, salonId);
   }
 
   /**
@@ -437,13 +438,13 @@ class AppointmentService {
    * Cancelled appointments do not block staff scheduling.
    *
    * @param {string} appointmentId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async cancelAppointment(appointmentId, companyId) {
-    const appointment = await Appointment.findOne({ _id: appointmentId, companyId });
+  async cancelAppointment(appointmentId, salonId) {
+    const appointment = await Appointment.findOne({ _id: appointmentId, salonId });
     if (!appointment) {
-      const err = new Error('Appointment not found or does not belong to your company.');
+      const err = new Error('Appointment not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'APPOINTMENT_NOT_FOUND';
       throw err;
@@ -464,11 +465,11 @@ class AppointmentService {
    * Updates status of an appointment (PENDING, CONFIRMED, COMPLETED, CANCELLED).
    *
    * @param {string} appointmentId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {string} newStatus
    * @returns {Promise<Object>}
    */
-  async updateStatus(appointmentId, companyId, newStatus) {
+  async updateStatus(appointmentId, salonId, newStatus) {
     const normalized = (newStatus || '').toUpperCase();
     if (!APPOINTMENT_STATUSES.includes(normalized)) {
       const err = new Error(`Invalid status '${newStatus}'. Must be one of: ${APPOINTMENT_STATUSES.join(', ')}.`);
@@ -477,9 +478,9 @@ class AppointmentService {
       throw err;
     }
 
-    const appointment = await Appointment.findOne({ _id: appointmentId, companyId });
+    const appointment = await Appointment.findOne({ _id: appointmentId, salonId });
     if (!appointment) {
-      const err = new Error('Appointment not found or does not belong to your company.');
+      const err = new Error('Appointment not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'APPOINTMENT_NOT_FOUND';
       throw err;
@@ -488,7 +489,7 @@ class AppointmentService {
     // If un-cancelling, verify overlap protection
     if (appointment.status === APPOINTMENT_STATUS.CANCELLED && normalized !== APPOINTMENT_STATUS.CANCELLED) {
       await this._checkStaffOverlap(
-        companyId,
+        salonId,
         appointment.staffId,
         appointment.date,
         appointment.startTime,
@@ -500,7 +501,52 @@ class AppointmentService {
     appointment.status = normalized;
     await appointment.save();
 
-    return this.getAppointmentById(appointmentId, companyId);
+    return this.getAppointmentById(appointmentId, salonId);
+  }
+
+  /**
+   * Returns active counts for clients, staff, and services within the salon.
+   * Uses DB-level countDocuments — never fetches full documents for counting.
+   * Determines canBook: true only if all three counts > 0.
+   *
+   * @param {string} salonId
+   * @returns {Promise<{ clientsCount, staffCount, servicesCount, canBook }>}
+   */
+  async getReadiness(salonId) {
+    const [clientsCount, staffCount, servicesCount] = await Promise.all([
+      Client.countDocuments({ salonId, isActive: true }),
+      Staff.countDocuments({ salonId, isActive: true }),
+      Service.countDocuments({ salonId, isActive: true }),
+    ]);
+
+    return {
+      clientsCount,
+      staffCount,
+      servicesCount,
+      canBook: clientsCount > 0 && staffCount > 0 && servicesCount > 0,
+    };
+  }
+
+  /**
+   * Returns minimal id+name lists for clients, staff, and services needed
+   * to populate appointment booking form dropdowns.
+   * Only active records are returned. Only id and name fields are projected.
+   *
+   * @param {string} salonId
+   * @returns {Promise<{ clients, staff, services }>}
+   */
+  async getFormData(salonId) {
+    const [clients, staff, services] = await Promise.all([
+      Client.find({ salonId, isActive: true }, '_id name phone').lean(),
+      Staff.find({ salonId, isActive: true }, '_id name title specialization').lean(),
+      Service.find({ salonId, isActive: true }, '_id name durationInMinutes price').lean(),
+    ]);
+
+    return {
+      clients: clients.map((c) => ({ id: c._id.toString(), name: c.name, phone: c.phone })),
+      staff: staff.map((s) => ({ id: s._id.toString(), name: s.name, title: s.title, specialization: s.specialization })),
+      services: services.map((s) => ({ id: s._id.toString(), name: s.name, durationInMinutes: s.durationInMinutes, price: s.price })),
+    };
   }
 }
 

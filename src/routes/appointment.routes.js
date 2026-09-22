@@ -8,6 +8,34 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// ─── Purpose-specific aggregate endpoints (MUST be before /:id) ────────────
+
+/**
+ * GET /api/v1/appointments/readiness
+ * Returns DB-level active counts (clientsCount, staffCount, servicesCount, canBook).
+ * Permission: appointments:create — this is an appointment-domain endpoint.
+ * Does NOT require staff:view or services:view.
+ */
+router.get(
+  '/readiness',
+  requirePermission(MODULES.APPOINTMENTS, ACTIONS.CREATE),
+  (req, res, next) => appointmentController.getReadiness(req, res, next)
+);
+
+/**
+ * GET /api/v1/appointments/form-data
+ * Returns minimal id+name lists for booking form dropdowns (clients, staff, services).
+ * Permission: appointments:create — same domain, same audience.
+ * Does NOT require staff:view or services:view.
+ */
+router.get(
+  '/form-data',
+  requirePermission(MODULES.APPOINTMENTS, ACTIONS.CREATE),
+  (req, res, next) => appointmentController.getFormData(req, res, next)
+);
+
+// ─── Standard CRUD routes ────────────────────────────────────────────────────
+
 // List appointments strictly within company
 router.get(
   '/',

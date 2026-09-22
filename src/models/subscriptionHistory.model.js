@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const subscriptionHistorySchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
+      required: [true, 'Salon ID is required'],
       index: true,
     },
     planId: {
@@ -29,7 +29,7 @@ const subscriptionHistorySchema = new mongoose.Schema(
     },
     action: {
       type: String,
-      enum: ['ASSIGN', 'RENEW', 'UPGRADE'],
+      enum: ['ASSIGN', 'RENEW', 'UPGRADE', 'REMOVE'],
       required: [true, 'Action is required'],
       index: true,
     },
@@ -39,7 +39,7 @@ const subscriptionHistorySchema = new mongoose.Schema(
   }
 );
 
-subscriptionHistorySchema.index({ companyId: 1, createdAt: -1 });
+subscriptionHistorySchema.index({ salonId: 1, createdAt: -1 });
 
 const SubscriptionHistory =
   mongoose.models.SubscriptionHistory ||

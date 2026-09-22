@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
+      required: [true, 'Salon ID is required'],
       index: true,
     },
     userId: {
@@ -26,16 +26,12 @@ const attendanceSchema = new mongoose.Schema(
       required: [true, 'Check-in time is required'],
     },
     latitude: {
-      type: Number,
+      type: String,
       required: [true, 'Check-in latitude is required'],
-      min: [-90, 'Latitude must be between -90 and 90'],
-      max: [90, 'Latitude must be between -90 and 90'],
     },
     longitude: {
-      type: Number,
+      type: String,
       required: [true, 'Check-in longitude is required'],
-      min: [-180, 'Longitude must be between -180 and 180'],
-      max: [180, 'Longitude must be between -180 and 180'],
     },
     distanceFromSalon: {
       type: Number,
@@ -54,12 +50,12 @@ const attendanceSchema = new mongoose.Schema(
   }
 );
 
-// Compound unique index ensuring one check-in per user per company per day
-attendanceSchema.index({ companyId: 1, userId: 1, date: 1 }, { unique: true });
+// Compound unique index ensuring one check-in per user per salon per day
+attendanceSchema.index({ salonId: 1, userId: 1, date: 1 }, { unique: true });
 
 // Multi-tenant query indexes
-attendanceSchema.index({ companyId: 1, date: 1 });
-attendanceSchema.index({ companyId: 1, status: 1 });
+attendanceSchema.index({ salonId: 1, date: 1 });
+attendanceSchema.index({ salonId: 1, status: 1 });
 
 const Attendance = mongoose.models.Attendance || mongoose.model('Attendance', attendanceSchema);
 

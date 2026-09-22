@@ -2,28 +2,28 @@
  * Server-Authoritative Tenant Isolation Utility
  *
  * CRITICAL TENANT ISOLATION RULE:
- * This helper strictly extracts companyId from req.user (derived from the verified JWT and populated active DB user).
- * It NEVER trusts or reads req.body.companyId, req.query.companyId, or req.params.companyId.
+ * This helper strictly extracts salonId from req.user (derived from the verified JWT and populated active DB user).
+ * It NEVER trusts or reads req.body.salonId, req.query.salonId, or req.params.salonId.
  */
 
 /**
- * Extracts the authoritative companyId from the authenticated user context.
+ * Extracts the authoritative salonId from the authenticated user context.
  *
  * @param {Object} req - Express request object
- * @returns {string|null} - The authenticated companyId
+ * @returns {string|null} - The authenticated salonId
  */
-const getCompanyIdFromUser = (req) => {
+const getSalonIdFromUser = (req) => {
   if (!req || !req.user) {
     return null;
   }
-  return req.user.companyId || null;
+  return req.user.salonId || null;
 };
 
 /**
  * Backwards compatibility helper for existing legacy references
  */
-const getSalonIdFromUser = (req) => {
-  return getCompanyIdFromUser(req);
+const getCompanyIdFromUser = (req) => {
+  return getSalonIdFromUser(req);
 };
 
 module.exports = {

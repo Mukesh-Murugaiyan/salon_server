@@ -3,15 +3,15 @@ const subscriptionService = require('./subscription.service');
 
 class StaffService {
   /**
-   * Lists staff members strictly belonging to the authenticated company.
+   * Lists staff members strictly belonging to the authenticated salon.
    * Supports search (by name, phone, email, title, or specialization) and status filtering.
    *
-   * @param {string} companyId - Authoritative companyId
+   * @param {string} salonId - Authoritative salonId
    * @param {Object} [filter={}]
    * @returns {Promise<Array<Object>>}
    */
-  async listStaff(companyId, filter = {}) {
-    const query = { companyId };
+  async listStaff(salonId, filter = {}) {
+    const query = { salonId };
 
     if (filter.isActive !== undefined && filter.isActive !== 'all') {
       query.isActive = filter.isActive === 'true' || filter.isActive === true;
@@ -49,16 +49,16 @@ class StaffService {
   }
 
   /**
-   * Retrieves single staff member by ID strictly within company boundaries.
+   * Retrieves single staff member by ID strictly within salon boundaries.
    *
    * @param {string} staffId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async getStaffById(staffId, companyId) {
-    const staff = await Staff.findOne({ _id: staffId, companyId });
+  async getStaffById(staffId, salonId) {
+    const staff = await Staff.findOne({ _id: staffId, salonId });
     if (!staff) {
-      const err = new Error('Staff member not found or does not belong to your company.');
+      const err = new Error('Staff member not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'STAFF_NOT_FOUND';
       throw err;
@@ -79,13 +79,13 @@ class StaffService {
   }
 
   /**
-   * Provisions a new staff member record in the company directory.
+   * Provisions a new staff member record in the salon directory.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} data
    * @returns {Promise<Object>}
    */
-  async createStaff(companyId, data) {
+  async createStaff(salonId, data) {
     const name = (data.name || '').trim();
     const phone = (data.phone || '').trim();
     const email = (data.email || '').trim().toLowerCase();
@@ -114,10 +114,10 @@ class StaffService {
       throw err;
     }
 
-    // Check duplicate phone within this company
-    const existing = await Staff.findOne({ companyId, phone });
+    // Check duplicate phone within this salon
+    const existing = await Staff.findOne({ salonId, phone });
     if (existing) {
-      const err = new Error(`A staff member with phone '${phone}' already exists in your company directory.`);
+      const err = new Error(`A staff member with phone '${phone}' already exists in your salon directory.`);
       err.status = 409;
       err.code = 'PHONE_EXISTS';
       throw err;
@@ -125,11 +125,11 @@ class StaffService {
 
     // Enforce subscription plan staff limit
     if (isActive) {
-      await subscriptionService.validateStaffLimit(companyId);
+      await subscriptionService.validateStaffLimit(salonId);
     }
 
     const staff = await Staff.create({
-      companyId,
+      salonId,
       name,
       phone,
       email,
@@ -154,14 +154,14 @@ class StaffService {
    * Updates an existing staff record within tenant boundaries.
    *
    * @param {string} staffId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} updateData
    * @returns {Promise<Object>}
    */
-  async updateStaff(staffId, companyId, updateData) {
-    const staff = await Staff.findOne({ _id: staffId, companyId });
+  async updateStaff(staffId, salonId, updateData) {
+    const staff = await Staff.findOne({ _id: staffId, salonId });
     if (!staff) {
-      const err = new Error('Staff member not found or does not belong to your company.');
+      const err = new Error('Staff member not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'STAFF_NOT_FOUND';
       throw err;
@@ -187,9 +187,9 @@ class StaffService {
         throw err;
       }
       if (phone !== staff.phone) {
-        const existing = await Staff.findOne({ companyId, phone });
+        const existing = await Staff.findOne({ salonId, phone });
         if (existing) {
-          const err = new Error(`A staff member with phone '${phone}' already exists in your company directory.`);
+          const err = new Error(`A staff member with phone '${phone}' already exists in your salon directory.`);
           err.status = 409;
           err.code = 'PHONE_EXISTS';
           throw err;
@@ -220,7 +220,7 @@ class StaffService {
     if (updateData.isActive !== undefined) {
       const nextActive = Boolean(updateData.isActive);
       if (nextActive && !staff.isActive) {
-        await subscriptionService.validateStaffLimit(companyId);
+        await subscriptionService.validateStaffLimit(salonId);
       }
       staff.isActive = nextActive;
     }
@@ -243,13 +243,13 @@ class StaffService {
    * Performs soft deletion by marking the staff member as inactive.
    *
    * @param {string} staffId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async deleteStaff(staffId, companyId) {
-    const staff = await Staff.findOne({ _id: staffId, companyId });
+  async deleteStaff(staffId, salonId) {
+    const staff = await Staff.findOne({ _id: staffId, salonId });
     if (!staff) {
-      const err = new Error('Staff member not found or does not belong to your company.');
+      const err = new Error('Staff member not found or does not belong to your salon.');
       err.status = 404;
       err.code = 'STAFF_NOT_FOUND';
       throw err;
@@ -272,12 +272,12 @@ class StaffService {
    * Toggles staff active status.
    *
    * @param {string} staffId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {boolean} isActive
    * @returns {Promise<Object>}
    */
-  async toggleStatus(staffId, companyId, isActive) {
-    return this.updateStaff(staffId, companyId, { isActive });
+  async toggleStatus(staffId, salonId, isActive) {
+    return this.updateStaff(staffId, salonId, { isActive });
   }
 }
 

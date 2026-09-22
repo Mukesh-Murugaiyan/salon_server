@@ -3,10 +3,10 @@ const { APPOINTMENT_STATUS, APPOINTMENT_STATUSES } = require('../constants/appoi
 
 const appointmentSchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
+      required: [true, 'Salon ID is required'],
       index: true,
     },
     clientId: {
@@ -62,10 +62,10 @@ const appointmentSchema = new mongoose.Schema(
 );
 
 // Compound indexes for rapid tenant lookups, date filtering, and staff scheduling queries
-appointmentSchema.index({ companyId: 1, date: 1 });
-appointmentSchema.index({ companyId: 1, staffId: 1, date: 1 });
-appointmentSchema.index({ companyId: 1, clientId: 1 });
-appointmentSchema.index({ companyId: 1, status: 1 });
+appointmentSchema.index({ salonId: 1, date: 1 });
+appointmentSchema.index({ salonId: 1, staffId: 1, date: 1 });
+appointmentSchema.index({ salonId: 1, clientId: 1 });
+appointmentSchema.index({ salonId: 1, status: 1 });
 
 const Appointment = mongoose.models.Appointment || mongoose.model('Appointment', appointmentSchema);
 

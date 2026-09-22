@@ -5,14 +5,23 @@ const { toSafeUser } = require('../utils/serializer');
 
 class UserService {
   /**
-   * Retrieves a list of users strictly scoped to the authenticated user's company.
+   * Retrieves a list of users strictly scoped to the authenticated user's salon.
+     /**
+   * Retrieves a list of users strictly scoped to the authenticated user's salon,
+   * or all users / filtered by salonId if Super Admin (salonId == null).
    *
-   * @param {string} companyId - Authoritative companyId
+   * @param {string|null} salonId - Authoritative salonId or null for Super Admin
    * @param {Object} [filter={}] - Query filters
    * @returns {Promise<Array<Object>>} Sanitized user list
    */
-  async getUsers(companyId, filter = {}) {
-    const query = { companyId };
+  async getUsers(salonId, filter = {}) {
+    const query = {};
+
+    if (salonId) {
+      query.salonId = salonId;
+    } else if (filter.salonId) {
+      query.salonId = filter.salonId;
+    }
 
     if (filter.roleId) {
       query.roleId = filter.roleId;
@@ -23,7 +32,7 @@ class UserService {
     }
 
     const users = await User.find(query)
-      .populate('companyId')
+      .populate('salonId')
       .populate('roleId')
       .sort({ createdAt: -1 });
 
@@ -31,15 +40,20 @@ class UserService {
   }
 
   /**
-   * Retrieves a single user by ID strictly within the company boundary.
+   * Retrieves a single user by ID strictly within the salon boundary (or globally for Super Admin).
    *
    * @param {string} targetUserId
-   * @param {string} companyId
+   * @param {string|null} salonId
    * @returns {Promise<Object>}
    */
-  async getUserById(targetUserId, companyId) {
-    const user = await User.findOne({ _id: targetUserId, companyId })
-      .populate('companyId')
+  async getUserById(targetUserId, salonId) {
+    const query = { _id: targetUserId };
+    if (salonId) {
+      query.salonId = salonId;
+    }
+
+    const user = await User.findOne(query)
+      .populate('salonId')
       .populate('roleId');
 
     if (!user) {
@@ -53,14 +67,15 @@ class UserService {
   }
 
   /**
-   * Creates a new user in the authenticated company, validating role assignment.
+   * Creates a new user in the target salon, validating role assignment.
    *
-   * @param {string} companyId - Authoritative companyId
-   * @param {Object} payload - { name, email, password, roleId, isActive }
+   * @param {string|null} salonId - Authoritative salonId (or target salonId selected by Super Admin)
+   * @param {Object} payload - { name, email, password, roleId, isActive, salonId }
    * @returns {Promise<Object>} Created safe user
    */
-  async createUser(companyId, payload) {
+  async createUser(salonId, payload) {
     const { name, email, password, roleId, isActive } = payload;
+    const targetSalonId = salonId || payload.salonId || null;
 
     if (!name || !email || !password || !roleId) {
       const err = new Error('Name, email, password, and role are required.');
@@ -80,10 +95,14 @@ class UserService {
       throw err;
     }
 
-    // Verify role belongs to company and is active
-    const role = await Role.findOne({ _id: roleId, companyId });
+    // Verify role exists and is active (can be salon-specific or global)
+    const roleQuery = { _id: roleId };
+    if (targetSalonId) {
+      roleQuery.$or = [{ salonId: targetSalonId }, { salonId: null }];
+    }
+    const role = await Role.findOne(roleQuery);
     if (!role) {
-      const err = new Error('Selected role does not exist in your company.');
+      const err = new Error('Selected role does not exist.');
       err.status = 400;
       err.code = 'INVALID_ROLE';
       throw err;
@@ -95,28 +114,33 @@ class UserService {
       name: name.trim(),
       email: normalizedEmail,
       passwordHash,
-      companyId,
+      salonId: targetSalonId,
       roleId: role._id,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
 
     const populatedUser = await User.findById(newUser._id)
-      .populate('companyId')
+      .populate('salonId')
       .populate('roleId');
 
     return toSafeUser(populatedUser);
   }
 
   /**
-   * Updates an existing user within the company boundary.
+   * Updates an existing user within the salon boundary (or globally for Super Admin).
    *
    * @param {string} targetUserId
-   * @param {string} companyId
+   * @param {string|null} salonId - Authoritative caller salonId (null if Super Admin)
    * @param {Object} updates
    * @returns {Promise<Object>}
    */
-  async updateUser(targetUserId, companyId, updates) {
-    const user = await User.findOne({ _id: targetUserId, companyId });
+  async updateUser(targetUserId, salonId, updates) {
+    const query = { _id: targetUserId };
+    if (salonId) {
+      query.salonId = salonId;
+    }
+
+    const user = await User.findOne(query);
     if (!user) {
       const err = new Error('User not found.');
       err.status = 404;
@@ -144,10 +168,20 @@ class UserService {
       user.passwordHash = await hashPassword(updates.password);
     }
 
+    // Super Admin can update salonId
+    if (!salonId && updates.salonId !== undefined) {
+      user.salonId = updates.salonId || null;
+    }
+
     if (updates.roleId) {
-      const role = await Role.findOne({ _id: updates.roleId, companyId });
+      const effectiveSalon = salonId || user.salonId || null;
+      const roleQuery = { _id: updates.roleId };
+      if (effectiveSalon) {
+        roleQuery.$or = [{ salonId: effectiveSalon }, { salonId: null }];
+      }
+      const role = await Role.findOne(roleQuery);
       if (!role) {
-        const err = new Error('Selected role does not exist in your company.');
+        const err = new Error('Selected role does not exist.');
         err.status = 400;
         err.code = 'INVALID_ROLE';
         throw err;
@@ -162,7 +196,7 @@ class UserService {
     await user.save();
 
     const populatedUser = await User.findById(user._id)
-      .populate('companyId')
+      .populate('salonId')
       .populate('roleId');
 
     return toSafeUser(populatedUser);
@@ -172,11 +206,16 @@ class UserService {
    * Deactivates a user (preserving historical records per architecture).
    *
    * @param {string} targetUserId
-   * @param {string} companyId
+   * @param {string|null} salonId
    * @returns {Promise<Object>}
    */
-  async deleteUser(targetUserId, companyId) {
-    const user = await User.findOne({ _id: targetUserId, companyId });
+  async deleteUser(targetUserId, salonId) {
+    const query = { _id: targetUserId };
+    if (salonId) {
+      query.salonId = salonId;
+    }
+
+    const user = await User.findOne(query);
     if (!user) {
       const err = new Error('User not found.');
       err.status = 404;

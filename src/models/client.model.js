@@ -3,10 +3,10 @@ const { GENDER_VALUES } = require('../constants/client.constants');
 
 const clientSchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
+      required: [true, 'Salon ID is required'],
       index: true,
     },
     name: {
@@ -59,14 +59,9 @@ const clientSchema = new mongoose.Schema(
 );
 
 // Compound indexes for fast tenant-scoped lookups
-clientSchema.index({ companyId: 1, phone: 1 });
-clientSchema.index({ companyId: 1, name: 1 });
-clientSchema.index({ companyId: 1, isActive: 1 });
-
-// Backward compatibility alias for existing code referencing salonId
-clientSchema.virtual('salonId').get(function () {
-  return this.companyId;
-});
+clientSchema.index({ salonId: 1, phone: 1 });
+clientSchema.index({ salonId: 1, name: 1 });
+clientSchema.index({ salonId: 1, isActive: 1 });
 
 const Client = mongoose.models.Client || mongoose.model('Client', clientSchema);
 

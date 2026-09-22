@@ -23,10 +23,9 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Password hash is required'],
       select: false,
     },
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
       index: true,
     },
     roleId: {
@@ -47,7 +46,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Indexes for tenant queries and user lookups
-userSchema.index({ companyId: 1, email: 1 });
+userSchema.index({ salonId: 1, email: 1 });
 
 const User = mongoose.model('User', userSchema);
 

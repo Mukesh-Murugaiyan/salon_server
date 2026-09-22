@@ -4,17 +4,19 @@ const { PERMISSION_CATALOG } = require('../constants/permissions');
 
 class RoleService {
   /**
-   * Lists all roles belonging to the specified company with live user counts.
+   * Lists all roles belonging to the specified salon with live user counts.
    *
-   * @param {string} companyId - Authoritative companyId
+   * @param {string} salonId - Authoritative salonId
    * @returns {Promise<Array>} List of roles with userCount
    */
-  async listRoles(companyId) {
-    const roles = await Role.find({ companyId }).sort({ createdAt: -1 });
+  async listRoles(salonId) {
+    const query = salonId ? { $or: [{ salonId }, { salonId: null }] } : {};
+    const roles = await Role.find(query).sort({ createdAt: -1 });
 
-    // Aggregate user counts per role for this company
+    // Aggregate user counts per role for this salon (or globally for Super Admin)
+    const matchQuery = salonId ? { salonId } : {};
     const userCounts = await User.aggregate([
-      { $match: { companyId: roles.length ? roles[0].companyId : null } },
+      { $match: matchQuery },
       { $group: { _id: '$roleId', count: { $sum: 1 } } },
     ]);
 
@@ -43,11 +45,11 @@ class RoleService {
    * Retrieves single role by ID within tenant boundary, along with assigned users.
    *
    * @param {string} roleId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<{ role: Object, users: Array }>}
    */
-  async getRoleById(roleId, companyId) {
-    const role = await Role.findOne({ _id: roleId, companyId });
+  async getRoleById(roleId, salonId) {
+    const role = await Role.findOne({ _id: roleId, salonId });
     if (!role) {
       const err = new Error('Role not found.');
       err.status = 404;
@@ -55,7 +57,7 @@ class RoleService {
       throw err;
     }
 
-    const users = await User.find({ roleId: role._id, companyId })
+    const users = await User.find({ roleId: role._id, salonId })
       .select('name email isActive createdAt')
       .sort({ name: 1 });
 
@@ -83,13 +85,13 @@ class RoleService {
   }
 
   /**
-   * Creates a new role strictly bound to the authenticated company.
+   * Creates a new role strictly bound to the authenticated salon.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} roleData
    * @returns {Promise<Object>}
    */
-  async createRole(companyId, roleData) {
+  async createRole(salonId, roleData) {
     const name = (roleData.name || '').trim();
     const code = (roleData.code || name.replace(/\s+/g, '_')).trim().toUpperCase();
     const description = (roleData.description || '').trim();
@@ -103,16 +105,16 @@ class RoleService {
       throw err;
     }
 
-    const existingRole = await Role.findOne({ companyId, code });
+    const existingRole = await Role.findOne({ salonId, code });
     if (existingRole) {
-      const err = new Error(`Role with code '${code}' already exists in your company.`);
+      const err = new Error(`Role with code '${code}' already exists in your salon.`);
       err.status = 409;
       err.code = 'ROLE_CODE_EXISTS';
       throw err;
     }
 
     const role = await Role.create({
-      companyId,
+      salonId,
       name,
       code,
       description,
@@ -135,12 +137,12 @@ class RoleService {
    * Updates an existing role's metadata.
    *
    * @param {string} roleId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Object} updateData
    * @returns {Promise<Object>}
    */
-  async updateRole(roleId, companyId, updateData) {
-    const role = await Role.findOne({ _id: roleId, companyId });
+  async updateRole(roleId, salonId, updateData) {
+    const role = await Role.findOne({ _id: roleId, salonId });
     if (!role) {
       const err = new Error('Role not found.');
       err.status = 404;
@@ -170,10 +172,10 @@ class RoleService {
    * Deletes a role if no users are currently assigned to it.
    *
    * @param {string} roleId
-   * @param {string} companyId
+   * @param {string} salonId
    */
-  async deleteRole(roleId, companyId) {
-    const role = await Role.findOne({ _id: roleId, companyId });
+  async deleteRole(roleId, salonId) {
+    const role = await Role.findOne({ _id: roleId, salonId });
     if (!role) {
       const err = new Error('Role not found.');
       err.status = 404;
@@ -182,7 +184,7 @@ class RoleService {
     }
 
     // Check if any users are assigned
-    const assignedUsersCount = await User.countDocuments({ roleId: role._id, companyId });
+    const assignedUsersCount = await User.countDocuments({ roleId: role._id, salonId });
     if (assignedUsersCount > 0) {
       const err = new Error(
         `Cannot delete role '${role.name}' because ${assignedUsersCount} active user(s) are assigned to it. Reassign these users first.`
@@ -192,7 +194,7 @@ class RoleService {
       throw err;
     }
 
-    await Role.deleteOne({ _id: role._id, companyId });
+    await Role.deleteOne({ _id: role._id, salonId });
     return { message: `Role '${role.name}' deleted successfully.` };
   }
 
@@ -200,11 +202,11 @@ class RoleService {
    * Retrieves role permissions and system catalog schema for the permission matrix.
    *
    * @param {string} roleId
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<{ roleId: string, permissions: Array, catalog: Array }>}
    */
-  async getRolePermissions(roleId, companyId) {
-    const role = await Role.findOne({ _id: roleId, companyId });
+  async getRolePermissions(roleId, salonId) {
+    const role = await Role.findOne({ _id: roleId, salonId });
     if (!role) {
       const err = new Error('Role not found.');
       err.status = 404;
@@ -224,12 +226,12 @@ class RoleService {
    * Updates permissions assigned to a role.
    *
    * @param {string} roleId
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {Array<string>} permissions
    * @returns {Promise<Object>}
    */
-  async updateRolePermissions(roleId, companyId, permissions) {
-    const role = await Role.findOne({ _id: roleId, companyId });
+  async updateRolePermissions(roleId, salonId, permissions) {
+    const role = await Role.findOne({ _id: roleId, salonId });
     if (!role) {
       const err = new Error('Role not found.');
       err.status = 404;

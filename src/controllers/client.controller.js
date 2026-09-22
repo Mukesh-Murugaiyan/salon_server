@@ -1,5 +1,5 @@
 const clientService = require('../services/client.service');
-const { getCompanyIdFromUser } = require('../utils/tenant');
+const { getSalonIdFromUser } = require('../utils/tenant');
 
 class ClientController {
   /**
@@ -7,8 +7,8 @@ class ClientController {
    */
   async listClients(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const clients = await clientService.listClients(companyId, req.query);
+      const salonId = getSalonIdFromUser(req);
+      const clients = await clientService.listClients(salonId, req.query);
 
       return res.status(200).json({
         success: true,
@@ -24,8 +24,8 @@ class ClientController {
    */
   async getClient(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const client = await clientService.getClientById(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const client = await clientService.getClientById(req.params.id, salonId);
 
       return res.status(200).json({
         success: true,
@@ -41,8 +41,8 @@ class ClientController {
    */
   async createClient(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const client = await clientService.createClient(companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const client = await clientService.createClient(salonId, req.body);
 
       return res.status(201).json({
         success: true,
@@ -59,8 +59,8 @@ class ClientController {
    */
   async updateClient(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const client = await clientService.updateClient(req.params.id, companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const client = await clientService.updateClient(req.params.id, salonId, req.body);
 
       return res.status(200).json({
         success: true,
@@ -77,8 +77,8 @@ class ClientController {
    */
   async deleteClient(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const result = await clientService.deleteClient(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const result = await clientService.deleteClient(req.params.id, salonId);
 
       return res.status(200).json({
         success: true,
@@ -102,8 +102,8 @@ class ClientController {
         });
       }
 
-      const companyId = getCompanyIdFromUser(req);
-      const client = await clientService.toggleStatus(req.params.id, companyId, isActive);
+      const salonId = getSalonIdFromUser(req);
+      const client = await clientService.toggleStatus(req.params.id, salonId, isActive);
 
       return res.status(200).json({
         success: true,

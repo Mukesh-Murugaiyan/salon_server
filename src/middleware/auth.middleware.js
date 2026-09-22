@@ -3,7 +3,7 @@ const { User } = require('../models/user.model');
 
 /**
  * Authentication middleware.
- * Verifies JWT token and resolves database User, Company, Role and Permissions.
+ * Verifies JWT token and resolves database User, Salon, Role and Permissions.
  */
 const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -34,9 +34,9 @@ const authenticate = async (req, res, next) => {
   }
 
   try {
-    // Check database to ensure user still exists and load Company & Role with permissions
+    // Check database to ensure user still exists and load Salon & Role with permissions
     const user = await User.findById(decoded.userId)
-      .populate('companyId')
+      .populate('salonId')
       .populate('roleId');
 
     if (!user) {
@@ -53,10 +53,10 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    if (user.companyId && !user.companyId.isActive) {
+    if (user.salonId && !user.salonId.isActive) {
       return res.status(403).json({
-        error: 'COMPANY_DISABLED',
-        message: 'Your company account is inactive. Please contact support.',
+        error: 'SALON_DISABLED',
+        message: 'Your salon account is inactive. Please contact support.',
       });
     }
 
@@ -67,20 +67,20 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    const companyIdStr = user.companyId ? user.companyId._id.toString() : null;
+    const salonIdStr = user.salonId ? user.salonId._id.toString() : null;
     const roleIdStr = user.roleId ? user.roleId._id.toString() : null;
 
-    // Attach verified user context, company, role, and dynamic permissions to request
+    // Attach verified user context, salon, role, and dynamic permissions to request
     req.user = {
       id: user._id.toString(),
       email: user.email,
       name: user.name,
-      companyId: companyIdStr,
-      company: user.companyId
+      salonId: salonIdStr,
+      salon: user.salonId
         ? {
-            id: companyIdStr,
-            name: user.companyId.name,
-            code: user.companyId.code,
+            id: salonIdStr,
+            name: user.salonId.name,
+            code: user.salonId.code,
           }
         : null,
       roleId: roleIdStr,
@@ -92,8 +92,6 @@ const authenticate = async (req, res, next) => {
           }
         : null,
       permissions: user.roleId && Array.isArray(user.roleId.permissions) ? user.roleId.permissions : [],
-      // Compatibility alias
-      salonId: companyIdStr,
     };
 
     next();

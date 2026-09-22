@@ -1,5 +1,5 @@
 const staffService = require('../services/staff.service');
-const { getCompanyIdFromUser } = require('../utils/tenant');
+const { getSalonIdFromUser } = require('../utils/tenant');
 
 class StaffController {
   /**
@@ -7,8 +7,8 @@ class StaffController {
    */
   async listStaff(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const staff = await staffService.listStaff(companyId, req.query);
+      const salonId = getSalonIdFromUser(req);
+      const staff = await staffService.listStaff(salonId, req.query);
 
       return res.status(200).json({
         success: true,
@@ -24,8 +24,8 @@ class StaffController {
    */
   async getStaff(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const staffMember = await staffService.getStaffById(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const staffMember = await staffService.getStaffById(req.params.id, salonId);
 
       return res.status(200).json({
         success: true,
@@ -41,8 +41,8 @@ class StaffController {
    */
   async createStaff(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const staffMember = await staffService.createStaff(companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const staffMember = await staffService.createStaff(salonId, req.body);
 
       return res.status(201).json({
         success: true,
@@ -59,8 +59,8 @@ class StaffController {
    */
   async updateStaff(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const staffMember = await staffService.updateStaff(req.params.id, companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const staffMember = await staffService.updateStaff(req.params.id, salonId, req.body);
 
       return res.status(200).json({
         success: true,
@@ -77,8 +77,8 @@ class StaffController {
    */
   async deleteStaff(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const result = await staffService.deleteStaff(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const result = await staffService.deleteStaff(req.params.id, salonId);
 
       return res.status(200).json({
         success: true,
@@ -102,8 +102,8 @@ class StaffController {
         });
       }
 
-      const companyId = getCompanyIdFromUser(req);
-      const staffMember = await staffService.toggleStatus(req.params.id, companyId, isActive);
+      const salonId = getSalonIdFromUser(req);
+      const staffMember = await staffService.toggleStatus(req.params.id, salonId, isActive);
 
       return res.status(200).json({
         success: true,

@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 
 const staffSchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
+      required: [true, 'Salon ID is required'],
       index: true,
     },
     name: {
@@ -52,9 +52,9 @@ const staffSchema = new mongoose.Schema(
 );
 
 // Compound indexes for fast tenant lookups and validation
-staffSchema.index({ companyId: 1, phone: 1 });
-staffSchema.index({ companyId: 1, name: 1 });
-staffSchema.index({ companyId: 1, isActive: 1 });
+staffSchema.index({ salonId: 1, phone: 1 });
+staffSchema.index({ salonId: 1, name: 1 });
+staffSchema.index({ salonId: 1, isActive: 1 });
 
 const Staff = mongoose.models.Staff || mongoose.model('Staff', staffSchema);
 

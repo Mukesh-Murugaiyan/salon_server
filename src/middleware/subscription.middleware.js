@@ -1,5 +1,5 @@
-const Company = require('../models/company.model');
-const { getCompanyIdFromUser } = require('../utils/tenant');
+const Salon = require('../models/salon.model');
+const { getSalonIdFromUser } = require('../utils/tenant');
 
 /**
  * Middleware to enforce active subscription.
@@ -11,26 +11,26 @@ const { getCompanyIdFromUser } = require('../utils/tenant');
  */
 const requireActiveSubscription = async (req, res, next) => {
   try {
-    const companyId = getCompanyIdFromUser(req);
-    const company = await Company.findById(companyId);
+    const salonId = getSalonIdFromUser(req);
+    const salon = await Salon.findById(salonId);
 
-    if (!company) {
+    if (!salon) {
       return res.status(404).json({
         success: false,
-        message: 'Company not found.',
+        message: 'Salon not found.',
       });
     }
 
     const now = new Date();
     const isExpired =
-      company.subscriptionStatus !== 'ACTIVE' ||
-      !company.subscriptionEndDate ||
-      new Date(company.subscriptionEndDate) < now;
+      salon.subscriptionStatus !== 'ACTIVE' ||
+      !salon.subscriptionEndDate ||
+      new Date(salon.subscriptionEndDate) < now;
 
     if (isExpired) {
-      if (company.subscriptionStatus === 'ACTIVE') {
-        company.subscriptionStatus = 'EXPIRED';
-        await company.save();
+      if (salon.subscriptionStatus === 'ACTIVE') {
+        salon.subscriptionStatus = 'EXPIRED';
+        await salon.save();
       }
 
       return res.status(403).json({
@@ -39,7 +39,7 @@ const requireActiveSubscription = async (req, res, next) => {
       });
     }
 
-    req.company = company;
+    req.salon = salon;
     next();
   } catch (error) {
     next(error);

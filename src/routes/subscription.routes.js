@@ -15,6 +15,13 @@ router.get(
   (req, res, next) => subscriptionController.getCurrentSubscription(req, res, next)
 );
 
+// Explicitly match requested /status endpoint for OWNER dashboard
+router.get(
+  '/status',
+  requirePermission(MODULES.SUBSCRIPTION, ACTIONS.VIEW),
+  (req, res, next) => subscriptionController.getCurrentSubscription(req, res, next)
+);
+
 // Assign plan
 router.post(
   '/assign',
@@ -41,6 +48,13 @@ router.get(
   '/history',
   requirePermission(MODULES.SUBSCRIPTION, ACTIONS.HISTORY),
   (req, res, next) => subscriptionController.getSubscriptionHistory(req, res, next)
+);
+
+// Remove plan (Super Admin only typically, or whoever has update perm)
+router.post(
+  '/remove',
+  requirePermission(MODULES.SUBSCRIPTION, ACTIONS.UPDATE), // using update for plan removal
+  (req, res, next) => subscriptionController.removePlan(req, res, next)
 );
 
 module.exports = router;

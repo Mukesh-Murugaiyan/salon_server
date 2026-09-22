@@ -1,5 +1,5 @@
 const roleService = require('../services/role.service');
-const { getCompanyIdFromUser } = require('../utils/tenant');
+const { getSalonIdFromUser } = require('../utils/tenant');
 
 class RoleController {
   /**
@@ -7,8 +7,8 @@ class RoleController {
    */
   async listRoles(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const roles = await roleService.listRoles(companyId);
+      const salonId = getSalonIdFromUser(req);
+      const roles = await roleService.listRoles(salonId);
       return res.status(200).json({
         success: true,
         roles,
@@ -23,8 +23,8 @@ class RoleController {
    */
   async getRole(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const data = await roleService.getRoleById(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const data = await roleService.getRoleById(req.params.id, salonId);
       return res.status(200).json({
         success: true,
         ...data,
@@ -39,8 +39,8 @@ class RoleController {
    */
   async createRole(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const role = await roleService.createRole(companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const role = await roleService.createRole(salonId, req.body);
       return res.status(201).json({
         success: true,
         role,
@@ -56,8 +56,8 @@ class RoleController {
    */
   async updateRole(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const role = await roleService.updateRole(req.params.id, companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const role = await roleService.updateRole(req.params.id, salonId, req.body);
       return res.status(200).json({
         success: true,
         role,
@@ -73,8 +73,8 @@ class RoleController {
    */
   async deleteRole(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const result = await roleService.deleteRole(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const result = await roleService.deleteRole(req.params.id, salonId);
       return res.status(200).json({
         success: true,
         message: result.message,
@@ -89,8 +89,8 @@ class RoleController {
    */
   async getRolePermissions(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const data = await roleService.getRolePermissions(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const data = await roleService.getRolePermissions(req.params.id, salonId);
       return res.status(200).json({
         success: true,
         ...data,
@@ -105,10 +105,10 @@ class RoleController {
    */
   async updateRolePermissions(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
+      const salonId = getSalonIdFromUser(req);
       const result = await roleService.updateRolePermissions(
         req.params.id,
-        companyId,
+        salonId,
         req.body.permissions
       );
       return res.status(200).json({

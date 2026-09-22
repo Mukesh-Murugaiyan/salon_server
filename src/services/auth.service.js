@@ -5,7 +5,7 @@ const { toSafeUser } = require('../utils/serializer');
 
 class AuthService {
   /**
-   * Authenticates user via email and password, dynamically loading Company, Role, and Permissions.
+   * Authenticates user via email and password, dynamically loading Salon, Role, and Permissions.
    *
    * @param {string} rawEmail - Plain email string
    * @param {string} password - Plain password string
@@ -17,7 +17,7 @@ class AuthService {
     // Find user with passwordHash
     const user = await User.findOne({ email: normalizedEmail })
       .select('+passwordHash')
-      .populate('companyId')
+      .populate('salonId')
       .populate('roleId');
 
     if (!user) {
@@ -44,11 +44,11 @@ class AuthService {
       throw err;
     }
 
-    // Check company status
-    if (user.companyId && !user.companyId.isActive) {
-      const err = new Error('Your company account is disabled. Please contact support.');
+    // Check salon status
+    if (user.salonId && !user.salonId.isActive) {
+      const err = new Error('Your salon account is disabled. Please contact support.');
       err.status = 403;
-      err.code = 'COMPANY_DISABLED';
+      err.code = 'SALON_DISABLED';
       throw err;
     }
 
@@ -60,16 +60,14 @@ class AuthService {
       throw err;
     }
 
-    const companyIdStr = user.companyId ? user.companyId._id.toString() : null;
+    const salonIdStr = user.salonId ? user.salonId._id.toString() : null;
     const roleIdStr = user.roleId ? user.roleId._id.toString() : null;
 
-    // Generate JWT containing identifiers: userId, companyId, roleId
+    // Generate JWT containing identifiers: userId, salonId, roleId
     const token = signToken({
       userId: user._id.toString(),
-      companyId: companyIdStr,
+      salonId: salonIdStr,
       roleId: roleIdStr,
-      // Compatibility alias
-      salonId: companyIdStr,
     });
 
     return {
@@ -79,14 +77,14 @@ class AuthService {
   }
 
   /**
-   * Retrieves sanitized profile of currently authenticated user with loaded Company & Role.
+   * Retrieves sanitized profile of currently authenticated user with loaded Salon & Role.
    *
    * @param {string} userId
    * @returns {Promise<Object>}
    */
   async getCurrentUser(userId) {
     const user = await User.findById(userId)
-      .populate('companyId')
+      .populate('salonId')
       .populate('roleId');
 
     if (!user) {

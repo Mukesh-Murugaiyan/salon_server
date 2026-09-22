@@ -15,7 +15,7 @@ const MODULES = {
   CLIENTS: 'clients',
   SUBSCRIPTION: 'subscription',
   DASHBOARD: 'dashboard',
-  COMPANIES: 'companies',
+  SALONS: 'salons',
   PLANS: 'plans',
   SERVICES: 'services',
   ATTENDANCE: 'attendance',
@@ -86,9 +86,9 @@ const PERMISSION_CATALOG = [
     actions: [ACTIONS.VIEW],
   },
   {
-    module: MODULES.COMPANIES,
-    label: 'Companies',
-    description: 'Company profiles and settings',
+    module: MODULES.SALONS,
+    label: 'Salons',
+    description: 'Salon profiles and settings',
     actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE],
   },
   {

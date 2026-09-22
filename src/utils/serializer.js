@@ -1,6 +1,6 @@
 /**
  * Serializes a Mongoose User document or plain user object into a safe public representation.
- * Strips passwordHash, __v, and includes Company, Role, and Permissions.
+ * Strips passwordHash, __v, and includes Salon, Role, and Permissions.
  *
  * @param {Object} user - User document or object
  * @returns {Object} Safe user object
@@ -8,17 +8,17 @@
 const toSafeUser = (user) => {
   if (!user) return null;
 
-  const companyId = user.companyId && user.companyId._id
-    ? user.companyId._id.toString()
-    : (user.companyId ? user.companyId.toString() : null);
+  const salonId = user.salonId && user.salonId._id
+    ? user.salonId._id.toString()
+    : (user.salonId ? user.salonId.toString() : null);
 
-  const company = user.companyId && typeof user.companyId === 'object' && user.companyId._id
+  const salon = user.salonId && typeof user.salonId === 'object' && user.salonId._id
     ? {
-        id: user.companyId._id.toString(),
-        name: user.companyId.name,
-        code: user.companyId.code,
+        id: user.salonId._id.toString(),
+        name: user.salonId.name,
+        code: user.salonId.code,
       }
-    : companyId;
+    : salonId;
 
   const roleId = user.roleId && user.roleId._id
     ? user.roleId._id.toString()
@@ -40,15 +40,14 @@ const toSafeUser = (user) => {
     id: user._id ? user._id.toString() : user.id,
     name: user.name,
     email: user.email,
-    companyId,
-    company,
+    salonId,
+    salon,
     roleId,
     role,
     permissions,
     isActive: user.isActive !== undefined ? user.isActive : true,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    salonId: companyId,
   };
 };
 

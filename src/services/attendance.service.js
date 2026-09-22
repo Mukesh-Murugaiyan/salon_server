@@ -1,5 +1,5 @@
 const Attendance = require('../models/attendance.model');
-const Company = require('../models/company.model');
+const Salon = require('../models/salon.model');
 
 /**
  * Calculates great-circle distance between two points on a sphere using the Haversine formula.
@@ -34,48 +34,42 @@ class AttendanceService {
    * Processes an employee check-in with server-side geo-fencing calculation.
    *
    * @param {Object} params
-   * @param {string} params.companyId - Authenticated company ID
+   * @param {string} params.salonId - Authenticated salon ID
    * @param {string} params.userId - Authenticated user ID
    * @param {number} params.latitude - Check-in latitude
    * @param {number} params.longitude - Check-in longitude
    * @returns {Promise<Object>} Newly created attendance record
    */
-  async checkIn({ companyId, userId, latitude, longitude }) {
+  async checkIn({ salonId, userId, latitude, longitude }) {
     // 1. Validate latitude and longitude coordinates
     if (
       latitude === undefined ||
       latitude === null ||
       longitude === undefined ||
       longitude === null ||
-      typeof latitude !== 'number' ||
-      typeof longitude !== 'number' ||
-      Number.isNaN(latitude) ||
-      Number.isNaN(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
+      latitude === '' ||
+      longitude === ''
     ) {
-      const error = new Error('Valid GPS coordinates (latitude between -90 and 90, longitude between -180 and 180) are required.');
+      const error = new Error('Coordinates are required.');
       error.status = 400;
       error.code = 'VALIDATION_ERROR';
       throw error;
     }
 
-    // 2. Retrieve company location configuration
-    const company = await Company.findById(companyId);
-    if (!company) {
-      const error = new Error('Company not found.');
+    // 2. Retrieve salon location configuration
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const error = new Error('Salon not found.');
       error.status = 404;
       error.code = 'NOT_FOUND';
       throw error;
     }
 
     if (
-      company.latitude === null ||
-      company.latitude === undefined ||
-      company.longitude === null ||
-      company.longitude === undefined
+      salon.latitude === null ||
+      salon.latitude === undefined ||
+      salon.longitude === null ||
+      salon.longitude === undefined
     ) {
       const error = new Error('Salon location coordinates have not been configured. Please configure salon location in settings.');
       error.status = 400;
@@ -86,7 +80,7 @@ class AttendanceService {
     // 3. Check for existing check-in on the same date (YYYY-MM-DD)
     const todayDate = new Date().toISOString().slice(0, 10);
     const existingAttendance = await Attendance.findOne({
-      companyId,
+      salonId,
       userId,
       date: todayDate,
     });
@@ -100,13 +94,13 @@ class AttendanceService {
 
     // 4. Calculate distance using server-side Haversine formula
     const distance = calculateHaversineDistance(
-      company.latitude,
-      company.longitude,
+      salon.latitude,
+      salon.longitude,
       latitude,
       longitude
     );
 
-    const allowedRadius = company.allowedRadiusInMeters || 100;
+    const allowedRadius = salon.allowedRadiusInMeters || 100;
 
     // 5. Enforce geo-fencing: reject if out of permitted radius
     if (distance > allowedRadius) {
@@ -122,7 +116,7 @@ class AttendanceService {
 
     // 6. Save attendance record
     const attendance = await Attendance.create({
-      companyId,
+      salonId,
       userId,
       date: todayDate,
       checkInTime: new Date(),
@@ -140,10 +134,10 @@ class AttendanceService {
   /**
    * Retrieves today's check-in status for the authenticated user.
    */
-  async getTodayAttendance({ companyId, userId }) {
+  async getTodayAttendance({ salonId, userId }) {
     const todayDate = new Date().toISOString().slice(0, 10);
     const attendance = await Attendance.findOne({
-      companyId,
+      salonId,
       userId,
       date: todayDate,
     }).populate('userId', 'name email');
@@ -152,10 +146,10 @@ class AttendanceService {
   }
 
   /**
-   * Lists attendance records for the company with filtering and pagination.
+   * Lists attendance records for the salon with filtering and pagination.
    */
-  async listAttendance({ companyId, date, userId, status, page = 1, limit = 50 }) {
-    const query = { companyId };
+  async listAttendance({ salonId, date, userId, status, page = 1, limit = 50 }) {
+    const query = { salonId };
 
     if (date) {
       query.date = date;
@@ -190,10 +184,10 @@ class AttendanceService {
   /**
    * Retrieves a single attendance record by ID strictly scoped to the tenant.
    */
-  async getAttendanceById({ companyId, id }) {
+  async getAttendanceById({ salonId, id }) {
     const attendance = await Attendance.findOne({
       _id: id,
-      companyId,
+      salonId,
     }).populate('userId', 'name email');
 
     if (!attendance) {
@@ -209,40 +203,36 @@ class AttendanceService {
   /**
    * Retrieves the salon's configured geo-fence location and allowed radius.
    */
-  async getSalonLocation(companyId) {
-    const company = await Company.findById(companyId);
-    if (!company) {
-      const error = new Error('Company not found.');
+  async getSalonLocation(salonId) {
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const error = new Error('Salon not found.');
       error.status = 404;
       error.code = 'NOT_FOUND';
       throw error;
     }
 
     return {
-      latitude: company.latitude,
-      longitude: company.longitude,
-      allowedRadiusInMeters: company.allowedRadiusInMeters || 100,
-      isConfigured: company.latitude !== null && company.longitude !== null,
+      latitude: salon.latitude,
+      longitude: salon.longitude,
+      allowedRadiusInMeters: salon.allowedRadiusInMeters || 100,
+      isConfigured: salon.latitude !== null && salon.longitude !== null,
     };
   }
 
   /**
    * Updates salon geo-fence coordinates and allowed radius.
    */
-  async updateSalonLocation(companyId, { latitude, longitude, allowedRadiusInMeters }) {
+  async updateSalonLocation(salonId, { latitude, longitude, allowedRadiusInMeters }) {
     if (
       latitude === undefined ||
       latitude === null ||
       longitude === undefined ||
       longitude === null ||
-      typeof latitude !== 'number' ||
-      typeof longitude !== 'number' ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
+      latitude === '' ||
+      longitude === ''
     ) {
-      const error = new Error('Valid GPS coordinates (latitude between -90 and 90, longitude between -180 and 180) are required.');
+      const error = new Error('Coordinates are required.');
       error.status = 400;
       error.code = 'VALIDATION_ERROR';
       throw error;
@@ -256,23 +246,23 @@ class AttendanceService {
       throw error;
     }
 
-    const company = await Company.findById(companyId);
-    if (!company) {
-      const error = new Error('Company not found.');
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const error = new Error('Salon not found.');
       error.status = 404;
       error.code = 'NOT_FOUND';
       throw error;
     }
 
-    company.latitude = latitude;
-    company.longitude = longitude;
-    company.allowedRadiusInMeters = radius;
-    await company.save();
+    salon.latitude = latitude;
+    salon.longitude = longitude;
+    salon.allowedRadiusInMeters = radius;
+    await salon.save();
 
     return {
-      latitude: company.latitude,
-      longitude: company.longitude,
-      allowedRadiusInMeters: company.allowedRadiusInMeters,
+      latitude: salon.latitude,
+      longitude: salon.longitude,
+      allowedRadiusInMeters: salon.allowedRadiusInMeters,
       isConfigured: true,
     };
   }

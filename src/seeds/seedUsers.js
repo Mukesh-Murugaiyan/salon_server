@@ -1,83 +1,49 @@
 const { connectDB, disconnectDB } = require('../config/db');
-const Company = require('../models/company.model');
 const Role = require('../models/role.model');
 const { User } = require('../models/user.model');
 const { getAllPermissionStrings } = require('../constants/permissions');
 const { hashPassword } = require('../utils/password');
 
 /**
- * Idempotent seed script for Salon CRM (Ticket 3 - Dynamic RBAC).
+ * Idempotent seed script for Salon CRM.
  *
  * Seed Execution Hierarchy:
- * 1. Create Company
+ * 1. Create Super Admin Role (salonId = null)
  *         ↓
- * 2. Create Role for that Company
- *         ↓
- * 3. Create Super Admin User referencing Company + Role
+ * 2. Create Super Admin User (salonId = null)
  *
- * Creates ONLY the initial required entities:
- * 1 Company → 1 Role → 1 Super Admin User
+ * Creates ONLY the initial required entities.
+ * No Salon is seeded globally. Salons are created dynamically later.
  */
 const seedDatabase = async (options = {}) => {
   const shouldDisconnect = options.shouldDisconnect !== undefined ? options.shouldDisconnect : require.main === module;
 
   if (process.env.NODE_ENV !== 'test') {
     console.log('====================================================');
-    console.log('🌱 Starting Dynamic DB Seeding (Ticket 3 - DB Driven RBAC)...');
+    console.log('🌱 Starting Dynamic DB Seeding (Tenant Refactor)...');
     console.log('====================================================');
   }
 
   try {
     await connectDB();
 
-    // 1. Create or Find Company
-    const companyName = process.env.SEED_COMPANY_NAME || 'Demo Company';
-    const companyCode = (process.env.SEED_COMPANY_CODE || 'DEMO').toUpperCase();
-
-    let company = await Company.findOne({ code: companyCode });
-    if (!company) {
-      company = await Company.create({
-        name: companyName,
-        code: companyCode,
-        isActive: true,
-        latitude: 12.9716,
-        longitude: 77.5946,
-        allowedRadiusInMeters: 200,
-      });
-      if (process.env.NODE_ENV !== 'test') {
-        console.log(`✅ Created Company: ${company.name} [Code: ${company.code}] (${company._id})`);
-      }
-    } else {
-      company.name = companyName;
-      company.isActive = true;
-      if (company.latitude === null || company.latitude === undefined) {
-        company.latitude = 12.9716;
-        company.longitude = 77.5946;
-        company.allowedRadiusInMeters = 200;
-      }
-      await company.save();
-      if (process.env.NODE_ENV !== 'test') {
-        console.log(`ℹ️  Existing Company updated: ${company.name} [Code: ${company.code}] (${company._id})`);
-      }
-    }
-
-    // 2. Create or Find Super Admin Role for that Company
+    // 1. Create or Find Super Admin Role (Global, salonId = null)
     const roleName = process.env.SEED_ROLE_NAME || 'Super Admin';
     const roleCode = (process.env.SEED_ROLE_CODE || 'SUPER_ADMIN').toUpperCase();
     const allPermissions = getAllPermissionStrings();
 
-    let role = await Role.findOne({ companyId: company._id, code: roleCode });
+    let role = await Role.findOne({ salonId: null, code: roleCode });
     if (!role) {
       role = await Role.create({
-        companyId: company._id,
+        salonId: null,
         name: roleName,
         code: roleCode,
-        description: 'Super Administrator with full dynamic system permissions',
+        description: 'Global Super Administrator with full system permissions',
         isActive: true,
         permissions: allPermissions,
       });
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`✅ Created Role: ${role.name} [Code: ${role.code}] with ${allPermissions.length} permissions`);
+        console.log(`Created Role: ${role.name} [Code: ${role.code}] with ${allPermissions.length} permissions`);
       }
     } else {
       role.name = roleName;
@@ -85,14 +51,14 @@ const seedDatabase = async (options = {}) => {
       role.isActive = true;
       await role.save();
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`ℹ️  Updated Role: ${role.name} [Code: ${role.code}] with ${allPermissions.length} permissions`);
+        console.log(`  Updated Role: ${role.name} [Code: ${role.code}] with ${allPermissions.length} permissions`);
       }
     }
 
-    // 3. Create or Find Super Admin User
-    const adminEmail = (process.env.SEED_ADMIN_EMAIL || 'admin@example.com').toLowerCase().trim();
+    // 2. Create or Find Super Admin User (Global, salonId = null)
+    const adminEmail = (process.env.SEED_ADMIN_EMAIL || 'superadmin@salon.com').toLowerCase().trim();
     const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'Admin@123';
-    const adminName = process.env.SEED_ADMIN_NAME || 'Platform Administrator';
+    const adminName = process.env.SEED_ADMIN_NAME || 'Super Admin';
     const passwordHash = await hashPassword(adminPassword);
 
     let user = await User.findOne({ email: adminEmail });
@@ -101,36 +67,35 @@ const seedDatabase = async (options = {}) => {
         name: adminName,
         email: adminEmail,
         passwordHash,
-        companyId: company._id,
+        salonId: null,
         roleId: role._id,
         isActive: true,
       });
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`✅ Created Super Admin User: ${user.email} (${user._id})`);
+        console.log(`Created Super Admin User: ${user.email} (${user._id})`);
       }
     } else {
       user.name = adminName;
       user.passwordHash = passwordHash;
-      user.companyId = company._id;
+      user.salonId = null;
       user.roleId = role._id;
       user.isActive = true;
       await user.save();
       if (process.env.NODE_ENV !== 'test') {
-        console.log(`ℹ️  Updated Super Admin User: ${user.email} (${user._id})`);
+        console.log(`  Updated Super Admin User: ${user.email} (${user._id})`);
       }
     }
 
     if (process.env.NODE_ENV !== 'test') {
       console.log('====================================================');
-      console.log('🎉 Seeding completed successfully! (1 Company → 1 Role → 1 User)');
+      console.log('🎉 Seeding completed successfully! (1 Role → 1 User)');
       console.log('Credentials:');
-      console.log(`  - Company: ${company.name} [${company.code}]`);
-      console.log(`  - Role   : ${role.name} [${role.code}]`);
+      console.log(`  - Role   : ${role.name} [${role.code}] (Global)`);
       console.log(`  - User   : ${user.email} / ${adminPassword}`);
       console.log('====================================================');
     }
 
-    return { company, role, user };
+    return { role, user };
   } catch (error) {
     if (process.env.NODE_ENV !== 'test') {
       console.error('❌ Seeding failed with error:', error);

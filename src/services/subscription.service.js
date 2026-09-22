@@ -1,4 +1,4 @@
-const Company = require('../models/company.model');
+const Salon = require('../models/salon.model');
 const Plan = require('../models/plan.model');
 const SubscriptionHistory = require('../models/subscriptionHistory.model');
 const Staff = require('../models/staff.model');
@@ -6,15 +6,15 @@ const Appointment = require('../models/appointment.model');
 
 class SubscriptionService {
   /**
-   * Retrieves active company subscription details, limits, and live quota usage.
+   * Retrieves active salon subscription details, limits, and live quota usage.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Object>}
    */
-  async getCurrentSubscription(companyId) {
-    const company = await Company.findById(companyId).populate('currentPlanId');
-    if (!company) {
-      const err = new Error('Company not found.');
+  async getCurrentSubscription(salonId) {
+    const salon = await Salon.findById(salonId).populate('currentPlanId');
+    if (!salon) {
+      const err = new Error('Salon not found.');
       err.status = 404;
       throw err;
     }
@@ -22,43 +22,43 @@ class SubscriptionService {
     const now = new Date();
     let isExpired = false;
 
-    if (company.subscriptionEndDate && new Date(company.subscriptionEndDate) < now) {
+    if (salon.subscriptionEndDate && new Date(salon.subscriptionEndDate) < now) {
       isExpired = true;
-      if (company.subscriptionStatus === 'ACTIVE') {
-        company.subscriptionStatus = 'EXPIRED';
-        await company.save();
+      if (salon.subscriptionStatus === 'ACTIVE') {
+        salon.subscriptionStatus = 'EXPIRED';
+        await salon.save();
       }
-    } else if (company.subscriptionStatus === 'EXPIRED' || !company.currentPlanId) {
+    } else if (salon.subscriptionStatus === 'EXPIRED' || !salon.currentPlanId) {
       isExpired = true;
     }
 
-    const plan = company.currentPlanId;
-    const remainingDays =
-      company.subscriptionEndDate && !isExpired
-        ? Math.max(0, Math.ceil((new Date(company.subscriptionEndDate) - now) / (1000 * 60 * 60 * 24)))
+    const plan = salon.currentPlanId;
+    const daysRemaining =
+      salon.subscriptionEndDate && !isExpired
+        ? Math.max(0, Math.ceil((new Date(salon.subscriptionEndDate) - now) / (1000 * 60 * 60 * 24)))
         : 0;
 
     // Quota counts
-    const staffCount = await Staff.countDocuments({ companyId, isActive: true });
+    const staffCount = await Staff.countDocuments({ salonId, isActive: true });
     
     // Count active appointments within current subscription cycle
     const appointmentQuery = {
-      companyId,
+      salonId,
       status: { $ne: 'CANCELLED' },
     };
-    if (company.subscriptionStartDate) {
-      appointmentQuery.createdAt = { $gte: company.subscriptionStartDate };
+    if (salon.subscriptionStartDate) {
+      appointmentQuery.createdAt = { $gte: salon.subscriptionStartDate };
     }
     const appointmentsCount = await Appointment.countDocuments(appointmentQuery);
 
     return {
-      companyId: company._id.toString(),
-      companyName: company.name,
-      status: company.subscriptionStatus,
+      salonId: salon._id.toString(),
+      salonName: salon.name,
+      status: salon.subscriptionStatus,
       isExpired,
-      startDate: company.subscriptionStartDate,
-      endDate: company.subscriptionEndDate,
-      remainingDays,
+      startDate: salon.subscriptionStartDate,
+      endDate: salon.subscriptionEndDate,
+      daysRemaining,
       plan: plan
         ? {
             id: plan._id.toString(),
@@ -81,13 +81,13 @@ class SubscriptionService {
   }
 
   /**
-   * Assigns a plan to the company.
+   * Assigns a plan to the salon.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @param {string} planId
    * @returns {Promise<Object>}
    */
-  async assignPlan(companyId, planId) {
+  async assignPlan(salonId, planId) {
     const plan = await Plan.findById(planId);
     if (!plan || !plan.isActive) {
       const err = new Error('Plan not found or is currently inactive.');
@@ -96,9 +96,9 @@ class SubscriptionService {
       throw err;
     }
 
-    const company = await Company.findById(companyId);
-    if (!company) {
-      const err = new Error('Company not found.');
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const err = new Error('Salon not found.');
       err.status = 404;
       throw err;
     }
@@ -106,14 +106,14 @@ class SubscriptionService {
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + plan.durationInDays * 24 * 60 * 60 * 1000);
 
-    company.currentPlanId = plan._id;
-    company.subscriptionStartDate = startDate;
-    company.subscriptionEndDate = endDate;
-    company.subscriptionStatus = 'ACTIVE';
-    await company.save();
+    salon.currentPlanId = plan._id;
+    salon.subscriptionStartDate = startDate;
+    salon.subscriptionEndDate = endDate;
+    salon.subscriptionStatus = 'ACTIVE';
+    await salon.save();
 
     await SubscriptionHistory.create({
-      companyId,
+      salonId,
       planId: plan._id,
       startDate,
       endDate,
@@ -121,48 +121,144 @@ class SubscriptionService {
       action: 'ASSIGN',
     });
 
-    return this.getCurrentSubscription(companyId);
+    return this.getCurrentSubscription(salonId);
   }
 
   /**
-   * Renews the current company subscription.
+   * Universal method for Super Admin to assign or change a plan,
+   * determining the action (ASSIGN vs UPGRADE) dynamically.
    *
-   * @param {string} companyId
+   * @param {string} salonId
+   * @param {string} planId
+   * @param {string} startDateString - Optional start date from frontend
    * @returns {Promise<Object>}
    */
-  async renewSubscription(companyId) {
-    const company = await Company.findById(companyId).populate('currentPlanId');
-    if (!company) {
-      const err = new Error('Company not found.');
+  async manageSalonPlan(salonId, planId, startDateString) {
+    const plan = await Plan.findById(planId);
+    if (!plan || !plan.isActive) {
+      const err = new Error('Selected plan not found or is currently inactive.');
+      err.status = 404;
+      err.code = 'PLAN_NOT_FOUND';
+      throw err;
+    }
+
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const err = new Error('Salon not found.');
       err.status = 404;
       throw err;
     }
 
-    if (!company.currentPlanId) {
-      const err = new Error('Company has no active or previous plan to renew. Please assign a plan first.');
+    const action = salon.currentPlanId ? 'UPGRADE' : 'ASSIGN';
+    const startDate = startDateString ? new Date(startDateString) : new Date();
+    
+    // Ensure valid date
+    if (isNaN(startDate.getTime())) {
+      const err = new Error('Please provide a valid subscription start date.');
+      err.status = 400;
+      err.code = 'INVALID_START_DATE';
+      throw err;
+    }
+
+    const endDate = new Date(startDate.getTime() + plan.durationInDays * 24 * 60 * 60 * 1000);
+
+    salon.currentPlanId = plan._id;
+    salon.subscriptionStartDate = startDate;
+    salon.subscriptionEndDate = endDate;
+    salon.subscriptionStatus = 'ACTIVE';
+    await salon.save();
+
+    await SubscriptionHistory.create({
+      salonId,
+      planId: plan._id,
+      startDate,
+      endDate,
+      price: plan.price,
+      action,
+    });
+
+    return this.getCurrentSubscription(salonId);
+  }
+
+  /**
+   * Completely removes the assigned plan from the salon.
+   *
+   * @param {string} salonId
+   * @returns {Promise<Object>}
+   */
+  async removeSalonPlan(salonId) {
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const err = new Error('Salon not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (!salon.currentPlanId) {
+      const err = new Error('Salon already has no plan assigned.');
+      err.status = 400;
+      throw err;
+    }
+
+    const previousPlanId = salon.currentPlanId;
+
+    salon.currentPlanId = null;
+    salon.subscriptionStartDate = null;
+    salon.subscriptionEndDate = null;
+    salon.subscriptionStatus = 'EXPIRED';
+    await salon.save();
+
+    await SubscriptionHistory.create({
+      salonId,
+      planId: previousPlanId,
+      startDate: new Date(),
+      endDate: new Date(),
+      price: 0,
+      action: 'REMOVE',
+    });
+
+    return this.getCurrentSubscription(salonId);
+  }
+
+  /**
+   * Renews the current salon subscription.
+   *
+   * @param {string} salonId
+   * @returns {Promise<Object>}
+   */
+  async renewSubscription(salonId) {
+    const salon = await Salon.findById(salonId).populate('currentPlanId');
+    if (!salon) {
+      const err = new Error('Salon not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (!salon.currentPlanId) {
+      const err = new Error('Salon has no active or previous plan to renew. Please assign a plan first.');
       err.status = 400;
       err.code = 'NO_PLAN_TO_RENEW';
       throw err;
     }
 
-    const plan = company.currentPlanId;
+    const plan = salon.currentPlanId;
     const now = new Date();
     
     // If currently active and end date is in the future, extend from current end date
     const baseDate =
-      company.subscriptionEndDate && new Date(company.subscriptionEndDate) > now
-        ? new Date(company.subscriptionEndDate)
+      salon.subscriptionEndDate && new Date(salon.subscriptionEndDate) > now
+        ? new Date(salon.subscriptionEndDate)
         : now;
 
-    const startDate = company.subscriptionStartDate || now;
+    const startDate = salon.subscriptionStartDate || now;
     const endDate = new Date(baseDate.getTime() + plan.durationInDays * 24 * 60 * 60 * 1000);
 
-    company.subscriptionEndDate = endDate;
-    company.subscriptionStatus = 'ACTIVE';
-    await company.save();
+    salon.subscriptionEndDate = endDate;
+    salon.subscriptionStatus = 'ACTIVE';
+    await salon.save();
 
     await SubscriptionHistory.create({
-      companyId,
+      salonId,
       planId: plan._id,
       startDate: now,
       endDate,
@@ -170,17 +266,78 @@ class SubscriptionService {
       action: 'RENEW',
     });
 
-    return this.getCurrentSubscription(companyId);
+    return this.getCurrentSubscription(salonId);
   }
 
   /**
-   * Upgrades / changes company to a new plan tier.
+   * Super Admin method to explicitly renew a salon plan.
    *
-   * @param {string} companyId
+   * @param {string} salonId
+   * @param {string} startDateString - Optional start date from frontend
+   * @returns {Promise<Object>}
+   */
+  async renewSalonPlan(salonId, startDateString) {
+    const salon = await Salon.findById(salonId).populate('currentPlanId');
+    if (!salon) {
+      const err = new Error('Salon not found.');
+      err.status = 404;
+      throw err;
+    }
+
+    if (!salon.currentPlanId) {
+      const err = new Error('Salon has no active or previous plan to renew. Please assign a plan first.');
+      err.status = 400;
+      err.code = 'NO_PLAN_TO_RENEW';
+      throw err;
+    }
+
+    const plan = salon.currentPlanId;
+    const now = new Date();
+    
+    // If startDateString is provided, use it, else calculate baseDate
+    let startDate;
+    if (startDateString) {
+      startDate = new Date(startDateString);
+      if (isNaN(startDate.getTime())) {
+        const err = new Error('Please provide a valid subscription start date.');
+        err.status = 400;
+        err.code = 'INVALID_START_DATE';
+        throw err;
+      }
+    } else {
+      const baseDate = salon.subscriptionEndDate && new Date(salon.subscriptionEndDate) > now
+        ? new Date(salon.subscriptionEndDate)
+        : now;
+      startDate = baseDate;
+    }
+
+    const endDate = new Date(startDate.getTime() + plan.durationInDays * 24 * 60 * 60 * 1000);
+
+    salon.subscriptionStartDate = startDate; // Depending on business rules, you may or may not update startDate. Usually renew extends from existing. We'll set it here based on payload.
+    salon.subscriptionEndDate = endDate;
+    salon.subscriptionStatus = 'ACTIVE';
+    await salon.save();
+
+    await SubscriptionHistory.create({
+      salonId,
+      planId: plan._id,
+      startDate,
+      endDate,
+      price: plan.price,
+      action: 'RENEW',
+    });
+
+    return this.getCurrentSubscription(salonId);
+  }
+
+  /**
+   * Upgrades / changes salon to a new plan tier.
+   *
+   * @param {string} salonId
    * @param {string} newPlanId
    * @returns {Promise<Object>}
    */
-  async upgradePlan(companyId, newPlanId) {
+  async upgradePlan(salonId, newPlanId) {
     const newPlan = await Plan.findById(newPlanId);
     if (!newPlan || !newPlan.isActive) {
       const err = new Error('Selected plan not found or is currently inactive.');
@@ -189,9 +346,9 @@ class SubscriptionService {
       throw err;
     }
 
-    const company = await Company.findById(companyId);
-    if (!company) {
-      const err = new Error('Company not found.');
+    const salon = await Salon.findById(salonId);
+    if (!salon) {
+      const err = new Error('Salon not found.');
       err.status = 404;
       throw err;
     }
@@ -199,14 +356,14 @@ class SubscriptionService {
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + newPlan.durationInDays * 24 * 60 * 60 * 1000);
 
-    company.currentPlanId = newPlan._id;
-    company.subscriptionStartDate = startDate;
-    company.subscriptionEndDate = endDate;
-    company.subscriptionStatus = 'ACTIVE';
-    await company.save();
+    salon.currentPlanId = newPlan._id;
+    salon.subscriptionStartDate = startDate;
+    salon.subscriptionEndDate = endDate;
+    salon.subscriptionStatus = 'ACTIVE';
+    await salon.save();
 
     await SubscriptionHistory.create({
-      companyId,
+      salonId,
       planId: newPlan._id,
       startDate,
       endDate,
@@ -214,24 +371,24 @@ class SubscriptionService {
       action: 'UPGRADE',
     });
 
-    return this.getCurrentSubscription(companyId);
+    return this.getCurrentSubscription(salonId);
   }
 
   /**
-   * Retrieves subscription history audit trail scoped strictly to company.
+   * Retrieves subscription history audit trail scoped strictly to salon.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    * @returns {Promise<Array<Object>>}
    */
-  async getSubscriptionHistory(companyId) {
-    const history = await SubscriptionHistory.find({ companyId })
+  async getSubscriptionHistory(salonId) {
+    const history = await SubscriptionHistory.find({ salonId })
       .populate('planId', 'name price durationInDays maxStaff maxAppointments')
       .sort({ createdAt: -1 });
 
     return history.map((h) => ({
       id: h._id.toString(),
       _id: h._id.toString(),
-      companyId: h.companyId,
+      salonId: h.salonId,
       plan: h.planId
         ? {
             id: h.planId._id.toString(),
@@ -254,21 +411,21 @@ class SubscriptionService {
   /**
    * Enforces staff limit against current subscription plan.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    */
-  async validateStaffLimit(companyId) {
-    const company = await Company.findById(companyId).populate('currentPlanId');
-    if (!company) {
-      const err = new Error('Company not found.');
+  async validateStaffLimit(salonId) {
+    const salon = await Salon.findById(salonId).populate('currentPlanId');
+    if (!salon) {
+      const err = new Error('Salon not found.');
       err.status = 404;
       throw err;
     }
 
     const now = new Date();
     if (
-      company.subscriptionStatus !== 'ACTIVE' ||
-      !company.subscriptionEndDate ||
-      new Date(company.subscriptionEndDate) < now
+      salon.subscriptionStatus !== 'ACTIVE' ||
+      !salon.subscriptionEndDate ||
+      new Date(salon.subscriptionEndDate) < now
     ) {
       const err = new Error('Your subscription has expired. Please contact the administrator to renew your plan.');
       err.status = 403;
@@ -276,15 +433,15 @@ class SubscriptionService {
       throw err;
     }
 
-    const plan = company.currentPlanId;
+    const plan = salon.currentPlanId;
     if (!plan) {
-      const err = new Error('No active subscription plan assigned to your company.');
+      const err = new Error('No active subscription plan assigned to your salon.');
       err.status = 403;
       err.code = 'SUBSCRIPTION_EXPIRED';
       throw err;
     }
 
-    const currentStaffCount = await Staff.countDocuments({ companyId, isActive: true });
+    const currentStaffCount = await Staff.countDocuments({ salonId, isActive: true });
     if (currentStaffCount >= plan.maxStaff) {
       const err = new Error(`Staff limit reached: Your current plan '${plan.name}' allows up to ${plan.maxStaff} active staff members. Please upgrade your subscription.`);
       err.status = 400;
@@ -296,21 +453,21 @@ class SubscriptionService {
   /**
    * Enforces appointment limit against current subscription plan.
    *
-   * @param {string} companyId
+   * @param {string} salonId
    */
-  async validateAppointmentLimit(companyId) {
-    const company = await Company.findById(companyId).populate('currentPlanId');
-    if (!company) {
-      const err = new Error('Company not found.');
+  async validateAppointmentLimit(salonId) {
+    const salon = await Salon.findById(salonId).populate('currentPlanId');
+    if (!salon) {
+      const err = new Error('Salon not found.');
       err.status = 404;
       throw err;
     }
 
     const now = new Date();
     if (
-      company.subscriptionStatus !== 'ACTIVE' ||
-      !company.subscriptionEndDate ||
-      new Date(company.subscriptionEndDate) < now
+      salon.subscriptionStatus !== 'ACTIVE' ||
+      !salon.subscriptionEndDate ||
+      new Date(salon.subscriptionEndDate) < now
     ) {
       const err = new Error('Your subscription has expired. Please contact the administrator to renew your plan.');
       err.status = 403;
@@ -318,20 +475,20 @@ class SubscriptionService {
       throw err;
     }
 
-    const plan = company.currentPlanId;
+    const plan = salon.currentPlanId;
     if (!plan) {
-      const err = new Error('No active subscription plan assigned to your company.');
+      const err = new Error('No active subscription plan assigned to your salon.');
       err.status = 403;
       err.code = 'SUBSCRIPTION_EXPIRED';
       throw err;
     }
 
     const appointmentQuery = {
-      companyId,
+      salonId,
       status: { $ne: 'CANCELLED' },
     };
-    if (company.subscriptionStartDate) {
-      appointmentQuery.createdAt = { $gte: company.subscriptionStartDate };
+    if (salon.subscriptionStartDate) {
+      appointmentQuery.createdAt = { $gte: salon.subscriptionStartDate };
     }
     const currentAppointmentCount = await Appointment.countDocuments(appointmentQuery);
 

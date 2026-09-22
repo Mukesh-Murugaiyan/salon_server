@@ -1,5 +1,5 @@
 const userService = require('../services/user.service');
-const { getCompanyIdFromUser } = require('../utils/tenant');
+const { getSalonIdFromUser } = require('../utils/tenant');
 
 class UserController {
   /**
@@ -7,8 +7,8 @@ class UserController {
    */
   async listUsers(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const users = await userService.getUsers(companyId, req.query);
+      const salonId = getSalonIdFromUser(req);
+      const users = await userService.getUsers(salonId, req.query);
 
       return res.status(200).json({
         success: true,
@@ -24,8 +24,8 @@ class UserController {
    */
   async getUser(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const user = await userService.getUserById(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const user = await userService.getUserById(req.params.id, salonId);
 
       return res.status(200).json({
         success: true,
@@ -41,8 +41,9 @@ class UserController {
    */
   async createUser(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const user = await userService.createUser(companyId, req.body);
+      const authSalonId = getSalonIdFromUser(req);
+      const salonId = authSalonId || req.body.salonId || null;
+      const user = await userService.createUser(salonId, req.body);
 
       return res.status(201).json({
         success: true,
@@ -59,8 +60,8 @@ class UserController {
    */
   async updateUser(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const user = await userService.updateUser(req.params.id, companyId, req.body);
+      const salonId = getSalonIdFromUser(req);
+      const user = await userService.updateUser(req.params.id, salonId, req.body);
 
       return res.status(200).json({
         success: true,
@@ -77,8 +78,8 @@ class UserController {
    */
   async deleteUser(req, res, next) {
     try {
-      const companyId = getCompanyIdFromUser(req);
-      const result = await userService.deleteUser(req.params.id, companyId);
+      const salonId = getSalonIdFromUser(req);
+      const result = await userService.deleteUser(req.params.id, salonId);
 
       return res.status(200).json({
         success: true,
@@ -102,8 +103,8 @@ class UserController {
         });
       }
 
-      const companyId = getCompanyIdFromUser(req);
-      const user = await userService.updateUser(req.params.id, companyId, { isActive });
+      const salonId = getSalonIdFromUser(req);
+      const user = await userService.updateUser(req.params.id, salonId, { isActive });
 
       return res.status(200).json({
         success: true,

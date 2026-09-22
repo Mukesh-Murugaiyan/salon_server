@@ -7,12 +7,12 @@ class AttendanceController {
    */
   async checkIn(req, res, next) {
     try {
-      const companyId = req.user.companyId;
+      const salonId = req.user.salonId;
       const userId = req.user.id || req.user._id;
       const { latitude, longitude } = req.body;
 
       const attendance = await attendanceService.checkIn({
-        companyId,
+        salonId,
         userId,
         latitude,
         longitude,
@@ -34,11 +34,11 @@ class AttendanceController {
    */
   async getTodayStatus(req, res, next) {
     try {
-      const companyId = req.user.companyId;
+      const salonId = req.user.salonId;
       const userId = req.user.id || req.user._id;
 
       const attendance = await attendanceService.getTodayAttendance({
-        companyId,
+        salonId,
         userId,
       });
 
@@ -53,16 +53,16 @@ class AttendanceController {
   }
 
   /**
-   * Lists company attendance logs with filtering.
+   * Lists salon attendance logs with filtering.
    * GET /api/attendance
    */
   async listAttendance(req, res, next) {
     try {
-      const companyId = req.user.companyId;
+      const salonId = req.user.salonId;
       const { date, userId, status, page, limit } = req.query;
 
       const result = await attendanceService.listAttendance({
-        companyId,
+        salonId,
         date,
         userId,
         status,
@@ -85,11 +85,11 @@ class AttendanceController {
    */
   async getAttendance(req, res, next) {
     try {
-      const companyId = req.user.companyId;
+      const salonId = req.user.salonId;
       const { id } = req.params;
 
       const attendance = await attendanceService.getAttendanceById({
-        companyId,
+        salonId,
         id,
       });
 
@@ -108,8 +108,8 @@ class AttendanceController {
    */
   async getLocation(req, res, next) {
     try {
-      const companyId = req.user.companyId;
-      const location = await attendanceService.getSalonLocation(companyId);
+      const salonId = req.user.salonId;
+      const location = await attendanceService.getSalonLocation(salonId);
 
       return res.status(200).json({
         success: true,
@@ -126,10 +126,10 @@ class AttendanceController {
    */
   async updateLocation(req, res, next) {
     try {
-      const companyId = req.user.companyId;
+      const salonId = req.user.salonId;
       const { latitude, longitude, allowedRadiusInMeters } = req.body;
 
-      const location = await attendanceService.updateSalonLocation(companyId, {
+      const location = await attendanceService.updateSalonLocation(salonId, {
         latitude,
         longitude,
         allowedRadiusInMeters,

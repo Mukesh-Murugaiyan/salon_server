@@ -2,15 +2,15 @@ const mongoose = require('mongoose');
 
 /**
  * Service Model
- * Represents a salon service offered by a specific company tenant.
- * Completely database-driven and company-specific (no hardcoded services).
+ * Represents a salon service offered by a specific salon tenant.
+ * Completely database-driven and salon-specific (no hardcoded services).
  */
 const serviceSchema = new mongoose.Schema(
   {
-    companyId: {
+    salonId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Company',
-      required: [true, 'Company ID is required'],
+      ref: 'Salon',
+      required: [true, 'Salon ID is required'],
       index: true,
     },
     name: {
@@ -48,8 +48,8 @@ const serviceSchema = new mongoose.Schema(
 );
 
 // Compound indexes for fast tenant queries and uniqueness validation
-serviceSchema.index({ companyId: 1, name: 1 });
-serviceSchema.index({ companyId: 1, isActive: 1 });
+serviceSchema.index({ salonId: 1, name: 1 });
+serviceSchema.index({ salonId: 1, isActive: 1 });
 
 const Service = mongoose.models.Service || mongoose.model('Service', serviceSchema);
 
