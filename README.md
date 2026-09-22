@@ -124,6 +124,16 @@ Result: Only 1 Company, 1 Role, and 1 User are created. No dummy Owner, Receptio
 
 > **Architectural Note (Staff vs User)**: Staff members represent salon service providers (stylists, barbers, therapists, etc.) who deliver services. They are intentionally kept separate from `User` entities, which represent system login accounts. A staff member does NOT automatically have login access.
 
+### Service Management (`services` module) — Ticket 6
+- `GET /api/v1/services` (`services:view`) — List salon services scoped to company with search and status filter.
+- `POST /api/v1/services` (`services:create`) — Create new service. Enforces unique active service name per company, positive duration, and non-negative price.
+- `GET /api/v1/services/:id` (`services:view`) — Get single service details by ID.
+- `PUT /api/v1/services/:id` (`services:update`) — Update service details, duration, and pricing.
+- `PATCH /api/v1/services/:id/status` (`services:update`) — Toggle active/inactive service status.
+- `DELETE /api/v1/services/:id` (`services:delete`) — Soft delete service (`isActive = false`).
+
+> **Architectural Note (Database-Driven Services)**: No service names or durations (e.g. Haircut, Facial, Hair Color) are hardcoded in the codebase. Every service is completely database-driven and isolated to its owning Company tenant.
+
 ---
 
 ## 5. Security & Isolation Invariants
