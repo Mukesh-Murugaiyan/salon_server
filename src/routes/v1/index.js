@@ -2,6 +2,9 @@ const express = require('express');
 const healthRoutes = require('../health.routes');
 const authRoutes = require('../auth.routes');
 const userRoutes = require('../user.routes');
+const roleRoutes = require('../role.routes');
+const dashboardRoutes = require('../dashboard.routes');
+const adminDashboardRoutes = require('../adminDashboard.routes');
 
 const v1Router = express.Router();
 
@@ -9,5 +12,8 @@ const v1Router = express.Router();
 v1Router.use('/health', healthRoutes);
 v1Router.use('/auth', authRoutes);
 v1Router.use('/users', userRoutes);
+v1Router.use('/roles', roleRoutes);
+v1Router.use('/dashboard', dashboardRoutes);
+v1Router.use('/admin', adminDashboardRoutes);
 
 module.exports = v1Router;

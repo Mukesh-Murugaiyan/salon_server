@@ -52,7 +52,7 @@ describe('Tenant Isolation & getSalonIdFromUser Tests', () => {
       name: 'Owner A',
       email: 'ownerA@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.OWNER,
+      role: ROLES.OWNER.value,
       salonId: salonA._id,
       isActive: true,
     });
@@ -66,7 +66,7 @@ describe('Tenant Isolation & getSalonIdFromUser Tests', () => {
       name: 'Receptionist A',
       email: 'receptionistA@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.RECEPTIONIST,
+      role: ROLES.RECEPTIONIST.value,
       salonId: salonA._id,
       isActive: true,
     });
@@ -81,7 +81,7 @@ describe('Tenant Isolation & getSalonIdFromUser Tests', () => {
       name: 'Super Admin',
       email: 'superadmin@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.SUPER_ADMIN,
+      role: ROLES.SUPER_ADMIN.value,
       salonId: null,
       isActive: true,
     });

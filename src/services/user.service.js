@@ -1,66 +1,51 @@
-const { User, ROLES } = require('../models/user.model');
+const { User } = require('../models/user.model');
+const Role = require('../models/role.model');
 const { hashPassword } = require('../utils/password');
 const { toSafeUser } = require('../utils/serializer');
 
 class UserService {
   /**
-   * Retrieves a list of users scoped to the authenticated tenant.
-   * - SUPER_ADMIN: Can view all users (or filter by optional salonId query).
-   * - OWNER: Can view all staff/users belonging strictly to their salon.
-   * - RECEPTIONIST: Can view colleagues in their salon.
+   * Retrieves a list of users strictly scoped to the authenticated user's company.
    *
-   * @param {Object} context
-   * @param {string|null} context.tenantSalonId - Authoritative salonId from req.user
-   * @param {string} context.currentUserRole - Role of the requesting user
-   * @param {Object} [filter={}] - Optional query filters
-   * @returns {Promise<Array<Object>>} List of sanitized user objects
+   * @param {string} companyId - Authoritative companyId
+   * @param {Object} [filter={}] - Query filters
+   * @returns {Promise<Array<Object>>} Sanitized user list
    */
-  async getUsers({ tenantSalonId, currentUserRole, filter = {} }) {
-    const query = {};
+  async getUsers(companyId, filter = {}) {
+    const query = { companyId };
 
-    // Strict tenant boundary enforcement
-    if (tenantSalonId) {
-      query.salonId = tenantSalonId;
-    } else if (currentUserRole === ROLES.SUPER_ADMIN && filter.salonId) {
-      // Super admin can optionally filter by salon
-      query.salonId = filter.salonId;
-    }
-
-    if (filter.role) {
-      query.role = filter.role;
+    if (filter.roleId) {
+      query.roleId = filter.roleId;
     }
 
     if (filter.isActive !== undefined) {
       query.isActive = filter.isActive === 'true' || filter.isActive === true;
     }
 
-    const users = await User.find(query).sort({ createdAt: -1 });
+    const users = await User.find(query)
+      .populate('companyId')
+      .populate('roleId')
+      .sort({ createdAt: -1 });
+
     return users.map(toSafeUser);
   }
 
   /**
-   * Retrieves a single user by ID with tenant access control.
+   * Retrieves a single user by ID strictly within the company boundary.
    *
    * @param {string} targetUserId
-   * @param {Object} context
-   * @param {string|null} context.tenantSalonId
-   * @param {string} context.currentUserRole
-   * @returns {Promise<Object>} Sanitized user object
+   * @param {string} companyId
+   * @returns {Promise<Object>}
    */
-  async getUserById(targetUserId, { tenantSalonId, currentUserRole }) {
-    const user = await User.findById(targetUserId);
+  async getUserById(targetUserId, companyId) {
+    const user = await User.findOne({ _id: targetUserId, companyId })
+      .populate('companyId')
+      .populate('roleId');
+
     if (!user) {
       const err = new Error('User not found.');
       err.status = 404;
-      err.code = 'NOT_FOUND';
-      throw err;
-    }
-
-    // Tenant check: Non-superadmin can only access users within their own salon
-    if (tenantSalonId && user.salonId && user.salonId.toString() !== tenantSalonId.toString()) {
-      const err = new Error('You do not have permission to access users from another salon.');
-      err.status = 403;
-      err.code = 'FORBIDDEN';
+      err.code = 'USER_NOT_FOUND';
       throw err;
     }
 
@@ -68,20 +53,16 @@ class UserService {
   }
 
   /**
-   * Creates a new user with role-based and tenant-based constraints.
-   * - OWNER: Can only create staff (e.g. RECEPTIONIST) for their own salon.
-   * - SUPER_ADMIN: Can create any role.
+   * Creates a new user in the authenticated company, validating role assignment.
    *
-   * @param {Object} payload
-   * @param {Object} context
-   * @param {string|null} context.tenantSalonId
-   * @param {string} context.currentUserRole
-   * @returns {Promise<Object>} Sanitized created user
+   * @param {string} companyId - Authoritative companyId
+   * @param {Object} payload - { name, email, password, roleId, isActive }
+   * @returns {Promise<Object>} Created safe user
    */
-  async createUser(payload, { tenantSalonId, currentUserRole }) {
-    const { name, email, password, role, salonId: requestedSalonId } = payload;
+  async createUser(companyId, payload) {
+    const { name, email, password, roleId, isActive } = payload;
 
-    if (!email || !password || !name || !role) {
+    if (!name || !email || !password || !roleId) {
       const err = new Error('Name, email, password, and role are required.');
       err.status = 400;
       err.code = 'VALIDATION_ERROR';
@@ -95,23 +76,17 @@ class UserService {
     if (existing) {
       const err = new Error('A user with this email address already exists.');
       err.status = 409;
-      err.code = 'CONFLICT';
+      err.code = 'EMAIL_EXISTS';
       throw err;
     }
 
-    // Determine target salonId server-side
-    let targetSalonId = null;
-    if (currentUserRole === ROLES.OWNER) {
-      // Owner can NEVER create a SUPER_ADMIN and can ONLY create users within their salon
-      if (role === ROLES.SUPER_ADMIN || role === ROLES.OWNER) {
-        const err = new Error('Owners can only provision staff members (RECEPTIONIST).');
-        err.status = 403;
-        err.code = 'FORBIDDEN';
-        throw err;
-      }
-      targetSalonId = tenantSalonId;
-    } else if (currentUserRole === ROLES.SUPER_ADMIN) {
-      targetSalonId = role === ROLES.SUPER_ADMIN ? null : requestedSalonId;
+    // Verify role belongs to company and is active
+    const role = await Role.findOne({ _id: roleId, companyId });
+    if (!role) {
+      const err = new Error('Selected role does not exist in your company.');
+      err.status = 400;
+      err.code = 'INVALID_ROLE';
+      throw err;
     }
 
     const passwordHash = await hashPassword(password);
@@ -120,70 +95,102 @@ class UserService {
       name: name.trim(),
       email: normalizedEmail,
       passwordHash,
-      role,
-      salonId: targetSalonId,
-      isActive: true,
+      companyId,
+      roleId: role._id,
+      isActive: isActive !== undefined ? Boolean(isActive) : true,
     });
 
-    return toSafeUser(newUser);
+    const populatedUser = await User.findById(newUser._id)
+      .populate('companyId')
+      .populate('roleId');
+
+    return toSafeUser(populatedUser);
   }
 
   /**
-   * Updates an existing user with tenant boundary verification.
+   * Updates an existing user within the company boundary.
    *
    * @param {string} targetUserId
+   * @param {string} companyId
    * @param {Object} updates
-   * @param {Object} context
-   * @param {string|null} context.tenantSalonId
-   * @param {string} context.currentUserRole
-   * @returns {Promise<Object>} Updated sanitized user
+   * @returns {Promise<Object>}
    */
-  async updateUser(targetUserId, updates, { tenantSalonId, currentUserRole }) {
-    const user = await User.findById(targetUserId);
+  async updateUser(targetUserId, companyId, updates) {
+    const user = await User.findOne({ _id: targetUserId, companyId });
     if (!user) {
       const err = new Error('User not found.');
       err.status = 404;
-      err.code = 'NOT_FOUND';
-      throw err;
-    }
-
-    // Tenant boundary check
-    if (tenantSalonId && user.salonId && user.salonId.toString() !== tenantSalonId.toString()) {
-      const err = new Error('You cannot modify users outside your salon.');
-      err.status = 403;
-      err.code = 'FORBIDDEN';
+      err.code = 'USER_NOT_FOUND';
       throw err;
     }
 
     if (updates.name) user.name = updates.name.trim();
+
+    if (updates.email) {
+      const normalizedEmail = updates.email.trim().toLowerCase();
+      if (normalizedEmail !== user.email) {
+        const existing = await User.findOne({ email: normalizedEmail });
+        if (existing) {
+          const err = new Error('A user with this email address already exists.');
+          err.status = 409;
+          err.code = 'EMAIL_EXISTS';
+          throw err;
+        }
+        user.email = normalizedEmail;
+      }
+    }
+
     if (updates.password) {
       user.passwordHash = await hashPassword(updates.password);
     }
-    if (updates.isActive !== undefined && currentUserRole !== ROLES.RECEPTIONIST) {
+
+    if (updates.roleId) {
+      const role = await Role.findOne({ _id: updates.roleId, companyId });
+      if (!role) {
+        const err = new Error('Selected role does not exist in your company.');
+        err.status = 400;
+        err.code = 'INVALID_ROLE';
+        throw err;
+      }
+      user.roleId = role._id;
+    }
+
+    if (updates.isActive !== undefined) {
       user.isActive = Boolean(updates.isActive);
     }
 
-    // Only SUPER_ADMIN can change user roles or salonId
-    if (currentUserRole === ROLES.SUPER_ADMIN) {
-      if (updates.role) user.role = updates.role;
-      if (updates.salonId !== undefined) user.salonId = updates.salonId;
-    }
-
     await user.save();
-    return toSafeUser(user);
+
+    const populatedUser = await User.findById(user._id)
+      .populate('companyId')
+      .populate('roleId');
+
+    return toSafeUser(populatedUser);
   }
 
   /**
-   * Deactivates/disables a user account.
+   * Deactivates a user (preserving historical records per architecture).
    *
    * @param {string} targetUserId
-   * @param {Object} context
-   * @param {string|null} context.tenantSalonId
-   * @param {string} context.currentUserRole
+   * @param {string} companyId
    * @returns {Promise<Object>}
    */
-  async setUserActiveStatus(targetUserId, isActive, { tenantSalonId, currentUserRole }) {
-    return this.updateUser(targetUserId, { isActive }, { tenantSalonId, currentUserRole });
+  async deleteUser(targetUserId, companyId) {
+    const user = await User.findOne({ _id: targetUserId, companyId });
+    if (!user) {
+      const err = new Error('User not found.');
+      err.status = 404;
+      err.code = 'USER_NOT_FOUND';
+      throw err;
+    }
+
+    user.isActive = false;
+    await user.save();
+
+    return {
+      message: `User '${user.name}' has been deactivated.`,
+      user: toSafeUser(user),
+    };
   }
 }
 

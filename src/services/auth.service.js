@@ -5,7 +5,7 @@ const { toSafeUser } = require('../utils/serializer');
 
 class AuthService {
   /**
-   * Authenticates user via email and password.
+   * Authenticates user via email and password, dynamically loading Company, Role, and Permissions.
    *
    * @param {string} rawEmail - Plain email string
    * @param {string} password - Plain password string
@@ -14,8 +14,11 @@ class AuthService {
   async login(rawEmail, password) {
     const normalizedEmail = (rawEmail || '').trim().toLowerCase();
 
-    // Find user with passwordHash explicitly selected
-    const user = await User.findOne({ email: normalizedEmail }).select('+passwordHash');
+    // Find user with passwordHash
+    const user = await User.findOne({ email: normalizedEmail })
+      .select('+passwordHash')
+      .populate('companyId')
+      .populate('roleId');
 
     if (!user) {
       const err = new Error('Invalid email or password.');
@@ -33,7 +36,7 @@ class AuthService {
       throw err;
     }
 
-    // Check account status
+    // Check user account status
     if (!user.isActive) {
       const err = new Error('Your account is disabled. Please contact the administrator.');
       err.status = 403;
@@ -41,11 +44,32 @@ class AuthService {
       throw err;
     }
 
-    // Generate JWT token containing only identity/authorization context
+    // Check company status
+    if (user.companyId && !user.companyId.isActive) {
+      const err = new Error('Your company account is disabled. Please contact support.');
+      err.status = 403;
+      err.code = 'COMPANY_DISABLED';
+      throw err;
+    }
+
+    // Check role status
+    if (user.roleId && !user.roleId.isActive) {
+      const err = new Error('Your assigned role is inactive. Please contact the administrator.');
+      err.status = 403;
+      err.code = 'ROLE_DISABLED';
+      throw err;
+    }
+
+    const companyIdStr = user.companyId ? user.companyId._id.toString() : null;
+    const roleIdStr = user.roleId ? user.roleId._id.toString() : null;
+
+    // Generate JWT containing identifiers: userId, companyId, roleId
     const token = signToken({
       userId: user._id.toString(),
-      role: user.role,
-      salonId: user.salonId ? user.salonId.toString() : null,
+      companyId: companyIdStr,
+      roleId: roleIdStr,
+      // Compatibility alias
+      salonId: companyIdStr,
     });
 
     return {
@@ -55,13 +79,15 @@ class AuthService {
   }
 
   /**
-   * Retrieves sanitized profile of currently authenticated user.
+   * Retrieves sanitized profile of currently authenticated user with loaded Company & Role.
    *
    * @param {string} userId
    * @returns {Promise<Object>}
    */
   async getCurrentUser(userId) {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId)
+      .populate('companyId')
+      .populate('roleId');
 
     if (!user) {
       const err = new Error('User not found.');

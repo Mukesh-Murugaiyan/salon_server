@@ -1,27 +1,32 @@
-const { ROLES } = require('../models/user.model');
-
 /**
- * Extracts the authoritative salonId from the authenticated user context.
+ * Server-Authoritative Tenant Isolation Utility
  *
  * CRITICAL TENANT ISOLATION RULE:
- * This helper strictly extracts salonId from req.user (derived from the verified JWT / DB user).
- * It NEVER reads req.body.salonId, req.query.salonId, or req.params.salonId.
+ * This helper strictly extracts companyId from req.user (derived from the verified JWT and populated active DB user).
+ * It NEVER trusts or reads req.body.companyId, req.query.companyId, or req.params.companyId.
+ */
+
+/**
+ * Extracts the authoritative companyId from the authenticated user context.
  *
  * @param {Object} req - Express request object
- * @returns {string|null} - The authenticated salonId for tenant-scoped users, or null for SUPER_ADMIN
+ * @returns {string|null} - The authenticated companyId
  */
-const getSalonIdFromUser = (req) => {
+const getCompanyIdFromUser = (req) => {
   if (!req || !req.user) {
     return null;
   }
+  return req.user.companyId || null;
+};
 
-  if (req.user.role === ROLES.SUPER_ADMIN) {
-    return null;
-  }
-
-  return req.user.salonId || null;
+/**
+ * Backwards compatibility helper for existing legacy references
+ */
+const getSalonIdFromUser = (req) => {
+  return getCompanyIdFromUser(req);
 };
 
 module.exports = {
+  getCompanyIdFromUser,
   getSalonIdFromUser,
 };

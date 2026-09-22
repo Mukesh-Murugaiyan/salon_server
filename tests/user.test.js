@@ -29,7 +29,7 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
       name: 'Super Admin',
       email: 'admin@platform.com',
       passwordHash,
-      role: ROLES.SUPER_ADMIN,
+      role: ROLES.SUPER_ADMIN.value,
       salonId: null,
       isActive: true,
     });
@@ -40,7 +40,7 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
       name: 'Owner A',
       email: 'ownerA@salona.com',
       passwordHash,
-      role: ROLES.OWNER,
+      role: ROLES.OWNER.value,
       salonId: salonA._id,
       isActive: true,
     });
@@ -51,7 +51,7 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
       name: 'Receptionist A1',
       email: 'recA1@salona.com',
       passwordHash,
-      role: ROLES.RECEPTIONIST,
+      role: ROLES.RECEPTIONIST.value,
       salonId: salonA._id,
       isActive: true,
     });
@@ -66,7 +66,7 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
       name: 'Receptionist B1',
       email: 'recB1@salonb.com',
       passwordHash,
-      role: ROLES.RECEPTIONIST,
+      role: ROLES.RECEPTIONIST.value,
       salonId: salonB._id,
       isActive: true,
     });

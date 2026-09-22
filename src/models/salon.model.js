@@ -27,6 +27,12 @@ const salonSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    subscriptionStatus: {
+      type: String,
+      enum: ['ACTIVE', 'EXPIRED', 'TRIAL'],
+      default: 'ACTIVE',
+      index: true,
+    },
   },
   {
     timestamps: true,

@@ -63,7 +63,7 @@ describe('Role-Based Access Control (RBAC) Middleware Tests', () => {
       name: 'Admin',
       email: 'admin@test.com',
       passwordHash: hashedPassword,
-      role: ROLES.SUPER_ADMIN,
+      role: ROLES.SUPER_ADMIN.value,
       salonId: null,
       isActive: true,
     });
@@ -73,7 +73,7 @@ describe('Role-Based Access Control (RBAC) Middleware Tests', () => {
       name: 'Owner',
       email: 'owner@test.com',
       passwordHash: hashedPassword,
-      role: ROLES.OWNER,
+      role: ROLES.OWNER.value,
       salonId: demoSalon._id,
       isActive: true,
     });
@@ -83,7 +83,7 @@ describe('Role-Based Access Control (RBAC) Middleware Tests', () => {
       name: 'Receptionist',
       email: 'receptionist@test.com',
       passwordHash: hashedPassword,
-      role: ROLES.RECEPTIONIST,
+      role: ROLES.RECEPTIONIST.value,
       salonId: demoSalon._id,
       isActive: true,
     });

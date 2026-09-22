@@ -1,11 +1,5 @@
 const mongoose = require('mongoose');
 
-const ROLES = {
-  SUPER_ADMIN: 'SUPER_ADMIN',
-  OWNER: 'OWNER',
-  RECEPTIONIST: 'RECEPTIONIST',
-};
-
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -29,19 +23,16 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Password hash is required'],
       select: false,
     },
-    role: {
-      type: String,
-      enum: {
-        values: Object.values(ROLES),
-        message: '{VALUE} is not a valid role',
-      },
-      required: [true, 'Role is required'],
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Company',
+      required: [true, 'Company ID is required'],
       index: true,
     },
-    salonId: {
+    roleId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Salon',
-      default: null,
+      ref: 'Role',
+      required: [true, 'Role ID is required'],
       index: true,
     },
     isActive: {
@@ -55,23 +46,11 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Server-side validation enforcing tenant/role business rules
-userSchema.pre('validate', function (next) {
-  if (this.role === ROLES.SUPER_ADMIN) {
-    if (this.salonId !== null && this.salonId !== undefined) {
-      this.invalidate('salonId', 'SUPER_ADMIN must not have a salonId assigned');
-    }
-  } else if (this.role === ROLES.OWNER || this.role === ROLES.RECEPTIONIST) {
-    if (!this.salonId) {
-      this.invalidate('salonId', `salonId is required for role ${this.role}`);
-    }
-  }
-  next();
-});
+// Indexes for tenant queries and user lookups
+userSchema.index({ companyId: 1, email: 1 });
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema);
 
 module.exports = {
   User,
-  ROLES,
 };

@@ -1,78 +1,96 @@
 const userService = require('../services/user.service');
-const { getSalonIdFromUser } = require('../utils/tenant');
+const { getCompanyIdFromUser } = require('../utils/tenant');
 
 class UserController {
   /**
-   * GET /api/users
+   * GET /api/v1/users
    */
   async listUsers(req, res, next) {
     try {
-      const tenantSalonId = getSalonIdFromUser(req);
-      const users = await userService.getUsers({
-        tenantSalonId,
-        currentUserRole: req.user.role,
-        filter: req.query,
-      });
+      const companyId = getCompanyIdFromUser(req);
+      const users = await userService.getUsers(companyId, req.query);
 
-      return res.status(200).json({ users });
+      return res.status(200).json({
+        success: true,
+        users,
+      });
     } catch (error) {
       next(error);
     }
   }
 
   /**
-   * GET /api/users/:id
+   * GET /api/v1/users/:id
    */
   async getUser(req, res, next) {
     try {
-      const tenantSalonId = getSalonIdFromUser(req);
-      const user = await userService.getUserById(req.params.id, {
-        tenantSalonId,
-        currentUserRole: req.user.role,
-      });
+      const companyId = getCompanyIdFromUser(req);
+      const user = await userService.getUserById(req.params.id, companyId);
 
-      return res.status(200).json({ user });
+      return res.status(200).json({
+        success: true,
+        user,
+      });
     } catch (error) {
       next(error);
     }
   }
 
   /**
-   * POST /api/users
+   * POST /api/v1/users
    */
   async createUser(req, res, next) {
     try {
-      const tenantSalonId = getSalonIdFromUser(req);
-      const user = await userService.createUser(req.body, {
-        tenantSalonId,
-        currentUserRole: req.user.role,
-      });
+      const companyId = getCompanyIdFromUser(req);
+      const user = await userService.createUser(companyId, req.body);
 
-      return res.status(201).json({ user });
+      return res.status(201).json({
+        success: true,
+        user,
+        message: 'User created successfully.',
+      });
     } catch (error) {
       next(error);
     }
   }
 
   /**
-   * PATCH /api/users/:id
+   * PUT /api/v1/users/:id or PATCH /api/v1/users/:id
    */
   async updateUser(req, res, next) {
     try {
-      const tenantSalonId = getSalonIdFromUser(req);
-      const user = await userService.updateUser(req.params.id, req.body, {
-        tenantSalonId,
-        currentUserRole: req.user.role,
-      });
+      const companyId = getCompanyIdFromUser(req);
+      const user = await userService.updateUser(req.params.id, companyId, req.body);
 
-      return res.status(200).json({ user });
+      return res.status(200).json({
+        success: true,
+        user,
+        message: 'User updated successfully.',
+      });
     } catch (error) {
       next(error);
     }
   }
 
   /**
-   * PATCH /api/users/:id/status
+   * DELETE /api/v1/users/:id
+   */
+  async deleteUser(req, res, next) {
+    try {
+      const companyId = getCompanyIdFromUser(req);
+      const result = await userService.deleteUser(req.params.id, companyId);
+
+      return res.status(200).json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/users/:id/status
    */
   async toggleStatus(req, res, next) {
     try {
@@ -84,13 +102,14 @@ class UserController {
         });
       }
 
-      const tenantSalonId = getSalonIdFromUser(req);
-      const user = await userService.setUserActiveStatus(req.params.id, isActive, {
-        tenantSalonId,
-        currentUserRole: req.user.role,
-      });
+      const companyId = getCompanyIdFromUser(req);
+      const user = await userService.updateUser(req.params.id, companyId, { isActive });
 
-      return res.status(200).json({ user });
+      return res.status(200).json({
+        success: true,
+        user,
+        message: `User status changed to ${isActive ? 'active' : 'inactive'}.`,
+      });
     } catch (error) {
       next(error);
     }

@@ -1,49 +1,59 @@
 const express = require('express');
 const userController = require('../controllers/user.controller');
 const { authenticate } = require('../middleware/auth.middleware');
-const { authorizeRoles } = require('../middleware/role.middleware');
-const { ROLES } = require('../models/user.model');
+const { requirePermission } = require('../middleware/permission.middleware');
+const { MODULES, ACTIONS } = require('../constants/permissions');
 
 const router = express.Router();
 
-// List users (Scoped by tenant for salon roles; global for SUPER_ADMIN)
+router.use(authenticate);
+
+// List users strictly within user's company
 router.get(
   '/',
-  authenticate,
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.RECEPTIONIST),
+  requirePermission(MODULES.USERS, ACTIONS.VIEW),
   (req, res, next) => userController.listUsers(req, res, next)
 );
 
 // Get single user by ID
 router.get(
   '/:id',
-  authenticate,
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.OWNER, ROLES.RECEPTIONIST),
+  requirePermission(MODULES.USERS, ACTIONS.VIEW),
   (req, res, next) => userController.getUser(req, res, next)
 );
 
-// Provision new user (Staff creation restricted to OWNER & SUPER_ADMIN)
+// Create new user in company
 router.post(
   '/',
-  authenticate,
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  requirePermission(MODULES.USERS, ACTIONS.CREATE),
   (req, res, next) => userController.createUser(req, res, next)
 );
 
 // Update user details
-router.patch(
+router.put(
   '/:id',
-  authenticate,
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  requirePermission(MODULES.USERS, ACTIONS.UPDATE),
   (req, res, next) => userController.updateUser(req, res, next)
 );
 
-// Toggle account active status (enable/disable)
+router.patch(
+  '/:id',
+  requirePermission(MODULES.USERS, ACTIONS.UPDATE),
+  (req, res, next) => userController.updateUser(req, res, next)
+);
+
+// Toggle user active status
 router.patch(
   '/:id/status',
-  authenticate,
-  authorizeRoles(ROLES.SUPER_ADMIN, ROLES.OWNER),
+  requirePermission(MODULES.USERS, ACTIONS.UPDATE),
   (req, res, next) => userController.toggleStatus(req, res, next)
+);
+
+// Delete / deactivate user
+router.delete(
+  '/:id',
+  requirePermission(MODULES.USERS, ACTIONS.DELETE),
+  (req, res, next) => userController.deleteUser(req, res, next)
 );
 
 module.exports = router;

@@ -30,7 +30,7 @@ describe('Authentication API & JWT Tests', () => {
       name: 'Super Admin',
       email: 'admin@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.SUPER_ADMIN,
+      role: ROLES.SUPER_ADMIN.value,
       salonId: null,
       isActive: true,
     });
@@ -39,7 +39,7 @@ describe('Authentication API & JWT Tests', () => {
       name: 'Salon Owner',
       email: 'owner@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.OWNER,
+      role: ROLES.OWNER.value,
       salonId: demoSalon._id,
       isActive: true,
     });
@@ -48,7 +48,7 @@ describe('Authentication API & JWT Tests', () => {
       name: 'Salon Receptionist',
       email: 'receptionist@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.RECEPTIONIST,
+      role: ROLES.RECEPTIONIST.value,
       salonId: demoSalon._id,
       isActive: true,
     });
@@ -57,7 +57,7 @@ describe('Authentication API & JWT Tests', () => {
       name: 'Disabled User',
       email: 'disabled@saloncrm.com',
       passwordHash: hashedPassword,
-      role: ROLES.OWNER,
+      role: ROLES.OWNER.value,
       salonId: demoSalon._id,
       isActive: false,
     });

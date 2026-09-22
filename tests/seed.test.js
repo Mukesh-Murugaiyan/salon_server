@@ -26,14 +26,14 @@ describe('Idempotent Database Seed Script Tests', () => {
     expect(userCountSecond).toBe(4);
 
     // Verify role distribution
-    const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN });
+    const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN.value });
     expect(superAdmins).toHaveLength(1);
     expect(superAdmins[0].salonId).toBeNull();
 
-    const owners = await User.find({ role: ROLES.OWNER });
+    const owners = await User.find({ role: ROLES.OWNER.value });
     expect(owners).toHaveLength(2); // owner + disabled
 
-    const receptionists = await User.find({ role: ROLES.RECEPTIONIST });
+    const receptionists = await User.find({ role: ROLES.RECEPTIONIST.value });
     expect(receptionists).toHaveLength(1);
   });
 });
