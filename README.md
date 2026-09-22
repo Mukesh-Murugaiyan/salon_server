@@ -134,6 +134,19 @@ Result: Only 1 Company, 1 Role, and 1 User are created. No dummy Owner, Receptio
 
 > **Architectural Note (Database-Driven Services)**: No service names or durations (e.g. Haircut, Facial, Hair Color) are hardcoded in the codebase. Every service is completely database-driven and isolated to its owning Company tenant.
 
+### Appointment Management (`appointments` module) — Ticket 7
+- `GET /api/v1/appointments` (`appointments:view`) — List appointments scoped to company with date, staff, client, and status filters.
+- `POST /api/v1/appointments` (`appointments:create`) — Book new appointment. Enforces:
+  - Cross-entity ownership: Client, Staff, and Service must all belong to authenticated company and be active.
+  - Business hours validation (strictly between 09:00 and 20:00).
+  - Database-driven duration: Appointment duration is strictly validated against `service.durationInMinutes`.
+  - Staff overlap protection: Same staff cannot have overlapping active bookings on the same date (`409 Conflict`).
+  - Cancelled appointments do NOT block slots.
+- `GET /api/v1/appointments/:id` (`appointments:view`) — Get single appointment details with populated client, staff, and service.
+- `PUT /api/v1/appointments/:id` (`appointments:update`) — Reschedule or update appointment details with overlap validation.
+- `PATCH /api/v1/appointments/:id/status` (`appointments:update`) — Update appointment status (`PENDING`, `CONFIRMED`, `COMPLETED`, `CANCELLED`).
+- `DELETE /api/v1/appointments/:id` (`appointments:delete`) — Cancel appointment (`status = 'CANCELLED'`).
+
 ---
 
 ## 5. Security & Isolation Invariants

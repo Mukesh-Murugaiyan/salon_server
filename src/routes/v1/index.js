@@ -6,6 +6,7 @@ const roleRoutes = require('../role.routes');
 const staffRoutes = require('../staff.routes');
 const serviceRoutes = require('../service.routes');
 const clientRoutes = require('../client.routes');
+const appointmentRoutes = require('../appointment.routes');
 const dashboardRoutes = require('../dashboard.routes');
 const adminDashboardRoutes = require('../adminDashboard.routes');
 
@@ -19,6 +20,7 @@ v1Router.use('/roles', roleRoutes);
 v1Router.use('/staff', staffRoutes);
 v1Router.use('/services', serviceRoutes);
 v1Router.use('/clients', clientRoutes);
+v1Router.use('/appointments', appointmentRoutes);
 v1Router.use('/dashboard', dashboardRoutes);
 v1Router.use('/admin', adminDashboardRoutes);
 
