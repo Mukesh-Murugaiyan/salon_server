@@ -1,49 +1,91 @@
 const Appointment = require('../models/appointment.model');
 const Client = require('../models/client.model');
+const Staff = require('../models/staff.model');
 const Salon = require('../models/salon.model');
 const { User } = require('../models/user.model');
-const { getStartOfDay, getEndOfDay } = require('../utils/date.utils');
 
 class DashboardService {
   /**
-   * Calculates dashboard summary metrics strictly scoped to authenticated user's salon.
+   * Calculates dashboard summary metrics scoped to authenticated user's salon,
+   * or platform-wide aggregated metrics if user is Super Admin / has no salonId.
    *
    * @param {Object} user - Authenticated user context from req.user
    * @returns {Promise<Object>}
    */
   async getDashboardSummary(user) {
     const tenantId = user?.salonId;
+
+    // Build today's date strings in both UTC and local time to match string-formatted dates
+    const todayUTC = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayDates = Array.from(new Set([todayUTC, todayLocal]));
+
     if (!tenantId) {
-      const err = new Error('Tenant context is required to access salon dashboard.');
-      err.status = 400;
-      err.code = 'TENANT_CONTEXT_MISSING';
-      throw err;
+      // Super admin or platform user without specific salon: return platform overview
+      const [
+        todayAppointments,
+        confirmedAppointments,
+        activeClients,
+        staffCount,
+        userCount,
+      ] = await Promise.all([
+        Appointment.countDocuments({
+          date: { $in: todayDates },
+        }),
+        Appointment.countDocuments({
+          date: { $in: todayDates },
+          status: 'CONFIRMED',
+        }),
+        Client.countDocuments({
+          isActive: true,
+        }),
+        Staff.countDocuments({
+          isActive: true,
+        }),
+        User.countDocuments({
+          isActive: true,
+        }),
+      ]);
+
+      return {
+        todayAppointments,
+        confirmedAppointments,
+        activeClients,
+        staffCount: staffCount || userCount || 0,
+        userCount,
+        subscriptionStatus: 'ACTIVE',
+        salonName: 'Platform Overview',
+      };
     }
 
-    const startOfToday = getStartOfDay();
-    const endOfToday = getEndOfDay();
-
-    // Query live metrics from database collections in parallel
+    // Query live metrics from database collections for specific tenant
     const [
       todayAppointments,
       confirmedAppointments,
       activeClients,
       staffCount,
+      userCount,
       salon,
     ] = await Promise.all([
       // Count today's total appointments
       Appointment.countDocuments({
         salonId: tenantId,
-        date: { $gte: startOfToday, $lte: endOfToday },
+        date: { $in: todayDates },
       }),
       // Count today's confirmed appointments
       Appointment.countDocuments({
         salonId: tenantId,
-        date: { $gte: startOfToday, $lte: endOfToday },
+        date: { $in: todayDates },
         status: 'CONFIRMED',
       }),
       // Count active clients registered under this salon
       Client.countDocuments({
+        salonId: tenantId,
+        isActive: true,
+      }),
+      // Count active staff members in this salon
+      Staff.countDocuments({
         salonId: tenantId,
         isActive: true,
       }),
@@ -63,7 +105,8 @@ class DashboardService {
       todayAppointments,
       confirmedAppointments,
       activeClients,
-      staffCount,
+      staffCount: staffCount || userCount || 0,
+      userCount,
       subscriptionStatus,
       salonName: entityName,
     };
