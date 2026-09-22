@@ -71,11 +71,34 @@ const salonSchema = new mongoose.Schema(
       default: 100,
       min: [1, 'Allowed radius must be at least 1 meter'],
     },
+    // Working hours fields
+    openingTime: {
+      type: String,
+      default: '09:00',
+      match: [/^([01]\d|2[0-3]):([0-5]\d)$/, 'Opening time must be in HH:mm format (00:00 - 23:59)'],
+    },
+    closingTime: {
+      type: String,
+      default: '20:00',
+      match: [/^([01]\d|2[0-3]):([0-5]\d)$/, 'Closing time must be in HH:mm format (00:00 - 23:59)'],
+    },
   },
   {
     timestamps: true,
   }
 );
+
+salonSchema.pre('validate', function () {
+  if (this.openingTime && this.closingTime) {
+    const [openH, openM] = this.openingTime.split(':').map(Number);
+    const [closeH, closeM] = this.closingTime.split(':').map(Number);
+    const openMins = openH * 60 + openM;
+    const closeMins = closeH * 60 + closeM;
+    if (!isNaN(openMins) && !isNaN(closeMins) && openMins >= closeMins) {
+      this.invalidate('openingTime', 'Opening time must be strictly before closing time.');
+    }
+  }
+});
 
 const Salon = mongoose.models.Salon || mongoose.model('Salon', salonSchema);
 

@@ -77,7 +77,25 @@ class SalonService {
       }
     }
 
-    const salon = await Salon.create(data);
+    // Validate working hours
+    const openingTime = data.openingTime || '09:00';
+    const closingTime = data.closingTime || '20:00';
+    const parseMinutes = (str) => {
+      const [h, m] = str.split(':').map(Number);
+      return h * 60 + m;
+    };
+    if (parseMinutes(openingTime) >= parseMinutes(closingTime)) {
+      const error = new Error('Opening time must be strictly before closing time.');
+      error.status = 400;
+      error.code = 'INVALID_HOURS';
+      throw error;
+    }
+
+    const salon = await Salon.create({
+      ...data,
+      openingTime,
+      closingTime,
+    });
     return salon;
   }
 
@@ -108,8 +126,33 @@ class SalonService {
       }
     }
 
+    // Validate working hours
+    const effectiveOpening = data.openingTime !== undefined ? data.openingTime : (salon.openingTime || '09:00');
+    const effectiveClosing = data.closingTime !== undefined ? data.closingTime : (salon.closingTime || '20:00');
+    const parseMinutes = (str) => {
+      const [h, m] = str.split(':').map(Number);
+      return h * 60 + m;
+    };
+    if (parseMinutes(effectiveOpening) >= parseMinutes(effectiveClosing)) {
+      const error = new Error('Opening time must be strictly before closing time.');
+      error.status = 400;
+      error.code = 'INVALID_HOURS';
+      throw error;
+    }
+
     // Apply allowed updates
-    const allowedFields = ['name', 'code', 'email', 'phone', 'address', 'latitude', 'longitude', 'allowedRadiusInMeters'];
+    const allowedFields = [
+      'name',
+      'code',
+      'email',
+      'phone',
+      'address',
+      'latitude',
+      'longitude',
+      'allowedRadiusInMeters',
+      'openingTime',
+      'closingTime',
+    ];
     for (const field of allowedFields) {
       if (data[field] !== undefined) {
         salon[field] = data[field];

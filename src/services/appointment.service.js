@@ -2,11 +2,11 @@ const Appointment = require('../models/appointment.model');
 const Client = require('../models/client.model');
 const Staff = require('../models/staff.model');
 const Service = require('../models/service.model');
+const Salon = require('../models/salon.model');
 const subscriptionService = require('./subscription.service');
 const {
   APPOINTMENT_STATUS,
   APPOINTMENT_STATUSES,
-  BUSINESS_HOURS,
   timeToMinutes,
   minutesToTime,
 } = require('../constants/appointment.constants');
@@ -73,15 +73,16 @@ class AppointmentService {
   }
 
   /**
-   * Validates business hours (09:00 - 20:00) and service duration alignment.
+   * Validates business hours based on salon's openingTime/closingTime and service duration alignment.
    *
    * @private
    * @param {string} startTime
    * @param {string} [endTime]
    * @param {number} serviceDurationInMinutes
+   * @param {{ opening: string, closing: string }} salonHours
    * @returns {{ startTime: string, endTime: string }}
    */
-  _validateTiming(startTime, endTime, serviceDurationInMinutes) {
+  _validateTiming(startTime, endTime, serviceDurationInMinutes, salonHours) {
     const startMins = timeToMinutes(startTime);
     if (isNaN(startMins)) {
       const err = new Error("Start time must be formatted as 'HH:mm'.");
@@ -119,10 +120,12 @@ class AppointmentService {
       endTime = minutesToTime(endMins);
     }
 
-    // Validate Business Hours (09:00 - 20:00)
-    if (startMins < BUSINESS_HOURS.START_MINUTES || endMins > BUSINESS_HOURS.END_MINUTES) {
+    // Validate against salon's specific working hours
+    const openingMins = timeToMinutes(salonHours.opening);
+    const closingMins = timeToMinutes(salonHours.closing);
+    if (startMins < openingMins || endMins > closingMins) {
       const err = new Error(
-        `Appointment must be scheduled completely within business hours (${BUSINESS_HOURS.START}–${BUSINESS_HOURS.END}).`
+        `Appointment must be scheduled completely within this salon's working hours (${salonHours.opening}–${salonHours.closing}).`
       );
       err.status = 400;
       err.code = 'OUTSIDE_BUSINESS_HOURS';
@@ -330,13 +333,20 @@ class AppointmentService {
     // 0. Enforce active subscription and appointment quota limit
     await subscriptionService.validateAppointmentLimit(salonId);
 
-    // 1. Verify cross-entity tenant isolation and active status
+    // 1. Fetch salon for working hours
+    const salon = await Salon.findById(salonId).select('openingTime closingTime');
+    const salonHours = {
+      opening: (salon && salon.openingTime) || '09:00',
+      closing: (salon && salon.closingTime) || '20:00',
+    };
+
+    // 2. Verify cross-entity tenant isolation and active status
     const { client, staff, service } = await this._validateEntities(salonId, clientId, staffId, serviceId);
 
-    // 2. Validate timing and business hours
-    const timing = this._validateTiming(startTime, endTime, service.durationInMinutes);
+    // 3. Validate timing against salon's working hours
+    const timing = this._validateTiming(startTime, endTime, service.durationInMinutes, salonHours);
 
-    // 3. Prevent overlapping active bookings for this staff member
+    // 4. Prevent overlapping active bookings for this staff member
     await this._checkStaffOverlap(salonId, staffId, date, timing.startTime, timing.endTime);
 
     // 4. Validate initial status
@@ -388,11 +398,18 @@ class AppointmentService {
     const startTime = data.startTime || appointment.startTime;
     const requestedEndTime = data.endTime;
 
-    // 1. Validate entities
+    // 1. Fetch salon working hours
+    const salon = await Salon.findById(salonId).select('openingTime closingTime');
+    const salonHours = {
+      opening: (salon && salon.openingTime) || '09:00',
+      closing: (salon && salon.closingTime) || '20:00',
+    };
+
+    // 2. Validate entities
     const { service } = await this._validateEntities(salonId, clientId, staffId, serviceId);
 
-    // 2. Validate timing
-    const timing = this._validateTiming(startTime, requestedEndTime, service.durationInMinutes);
+    // 3. Validate timing against salon's working hours
+    const timing = this._validateTiming(startTime, requestedEndTime, service.durationInMinutes, salonHours);
 
     // 3. Overlap check (if status is not CANCELLED)
     const targetStatus = data.status ? data.status.toUpperCase() : appointment.status;
