@@ -25,6 +25,10 @@ const ACTIONS = {
   CREATE: 'create',
   UPDATE: 'update',
   DELETE: 'delete',
+  ASSIGN: 'assign',
+  RENEW: 'renew',
+  UPGRADE: 'upgrade',
+  HISTORY: 'history',
 };
 
 /**
@@ -70,8 +74,8 @@ const PERMISSION_CATALOG = [
   {
     module: MODULES.SUBSCRIPTION,
     label: 'Subscription',
-    description: 'Billing, tiers, and subscription management',
-    actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE],
+    description: 'Billing, plan assignments, renewals, and history',
+    actions: [ACTIONS.VIEW, ACTIONS.ASSIGN, ACTIONS.RENEW, ACTIONS.UPGRADE, ACTIONS.HISTORY],
   },
   {
     module: MODULES.DASHBOARD,
@@ -88,8 +92,8 @@ const PERMISSION_CATALOG = [
   {
     module: MODULES.PLANS,
     label: 'Plans',
-    description: 'Subscription plans and pricing',
-    actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE],
+    description: 'Subscription plans, pricing, and quota limits',
+    actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE, ACTIONS.DELETE],
   },
 ];
 

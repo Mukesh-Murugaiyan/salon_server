@@ -2,6 +2,7 @@ const Appointment = require('../models/appointment.model');
 const Client = require('../models/client.model');
 const Staff = require('../models/staff.model');
 const Service = require('../models/service.model');
+const subscriptionService = require('./subscription.service');
 const {
   APPOINTMENT_STATUS,
   APPOINTMENT_STATUSES,
@@ -324,6 +325,9 @@ class AppointmentService {
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
+
+    // 0. Enforce active subscription and appointment quota limit
+    await subscriptionService.validateAppointmentLimit(companyId);
 
     // 1. Verify cross-entity tenant isolation and active status
     const { client, staff, service } = await this._validateEntities(companyId, clientId, staffId, serviceId);

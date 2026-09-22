@@ -24,6 +24,26 @@ const companySchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    // Ticket 8 Subscription Management Fields
+    currentPlanId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Plan',
+      default: null,
+    },
+    subscriptionStartDate: {
+      type: Date,
+      default: null,
+    },
+    subscriptionEndDate: {
+      type: Date,
+      default: null,
+    },
+    subscriptionStatus: {
+      type: String,
+      enum: ['ACTIVE', 'EXPIRED'],
+      default: 'EXPIRED',
+      index: true,
+    },
   },
   {
     timestamps: true,

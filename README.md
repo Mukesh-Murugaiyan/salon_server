@@ -147,6 +147,29 @@ Result: Only 1 Company, 1 Role, and 1 User are created. No dummy Owner, Receptio
 - `PATCH /api/v1/appointments/:id/status` (`appointments:update`) — Update appointment status (`PENDING`, `CONFIRMED`, `COMPLETED`, `CANCELLED`).
 - `DELETE /api/v1/appointments/:id` (`appointments:delete`) — Cancel appointment (`status = 'CANCELLED'`).
 
+### Plan Management (`plans` module) — Ticket 8
+- `GET /api/v1/plans` (`plans:view`) — List all subscription plans.
+- `POST /api/v1/plans` (`plans:create`) — Create new subscription plan with name, price, durationInDays, maxStaff, and maxAppointments.
+- `GET /api/v1/plans/:id` (`plans:view`) — Get single plan details.
+- `PUT /api/v1/plans/:id` (`plans:update`) — Update plan attributes, limits, and pricing.
+- `DELETE /api/v1/plans/:id` (`plans:delete`) — Deactivate / soft delete plan.
+
+### Subscription Management (`subscription` module) — Ticket 8
+- `GET /api/v1/subscription` (`subscription:view`) — Retrieve active company subscription, plan limits, remaining days, and live quota usage.
+- `POST /api/v1/subscription/assign` (`subscription:assign`) — Assign a plan to the authenticated company (creates audit history).
+- `POST /api/v1/subscription/renew` (`subscription:renew`) — Renew current subscription for another cycle (creates audit history).
+- `POST /api/v1/subscription/upgrade` (`subscription:upgrade`) — Upgrade / switch to another plan tier (creates audit history).
+- `GET /api/v1/subscription/history` (`subscription:history`) — Retrieve company subscription audit history trail.
+
+> **Subscription Enforcement Invariant**: When a salon company subscription expires or is unassigned, subscription-gated APIs return HTTP 403 with exact JSON:
+```json
+{
+  "error": "SUBSCRIPTION_EXPIRED",
+  "message": "Your subscription has expired. Please contact the administrator to renew your plan."
+}
+```
+> Plan limits (`maxStaff`, `maxAppointments`) are strictly enforced server-side. Attempts to exceed plan limits return HTTP 400 with `error: "PLAN_LIMIT_EXCEEDED"`.
+
 ---
 
 ## 5. Security & Isolation Invariants

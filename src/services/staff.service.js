@@ -1,4 +1,5 @@
 const Staff = require('../models/staff.model');
+const subscriptionService = require('./subscription.service');
 
 class StaffService {
   /**
@@ -122,6 +123,11 @@ class StaffService {
       throw err;
     }
 
+    // Enforce subscription plan staff limit
+    if (isActive) {
+      await subscriptionService.validateStaffLimit(companyId);
+    }
+
     const staff = await Staff.create({
       companyId,
       name,
@@ -212,7 +218,11 @@ class StaffService {
     }
 
     if (updateData.isActive !== undefined) {
-      staff.isActive = Boolean(updateData.isActive);
+      const nextActive = Boolean(updateData.isActive);
+      if (nextActive && !staff.isActive) {
+        await subscriptionService.validateStaffLimit(companyId);
+      }
+      staff.isActive = nextActive;
     }
 
     await staff.save();

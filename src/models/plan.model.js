@@ -5,26 +5,36 @@ const planSchema = new mongoose.Schema(
     name: {
       type: String,
       required: [true, 'Plan name is required'],
-      trim: true,
       unique: true,
+      trim: true,
+      minlength: [2, 'Plan name must be at least 2 characters'],
+      maxlength: [100, 'Plan name must not exceed 100 characters'],
     },
     description: {
       type: String,
       trim: true,
+      default: '',
+      maxlength: [500, 'Description must not exceed 500 characters'],
     },
     price: {
       type: Number,
-      required: [true, 'Plan price is required'],
-      min: 0,
+      required: [true, 'Price is required'],
+      min: [0, 'Price must be a non-negative number'],
     },
-    billingCycle: {
-      type: String,
-      enum: ['MONTHLY', 'YEARLY'],
-      default: 'MONTHLY',
+    durationInDays: {
+      type: Number,
+      required: [true, 'Duration in days is required'],
+      min: [1, 'Duration must be at least 1 day'],
     },
-    features: {
-      type: [String],
-      default: [],
+    maxStaff: {
+      type: Number,
+      required: [true, 'Max staff limit is required'],
+      min: [1, 'Max staff must be at least 1'],
+    },
+    maxAppointments: {
+      type: Number,
+      required: [true, 'Max appointments limit is required'],
+      min: [1, 'Max appointments must be at least 1'],
     },
     isActive: {
       type: Boolean,
