@@ -11,6 +11,7 @@ const planRoutes = require('../plan.routes');
 const subscriptionRoutes = require('../subscription.routes');
 const dashboardRoutes = require('../dashboard.routes');
 const adminDashboardRoutes = require('../adminDashboard.routes');
+const attendanceRoutes = require('../attendance.routes');
 
 const v1Router = express.Router();
 
@@ -27,5 +28,6 @@ v1Router.use('/plans', planRoutes);
 v1Router.use('/subscription', subscriptionRoutes);
 v1Router.use('/dashboard', dashboardRoutes);
 v1Router.use('/admin', adminDashboardRoutes);
+v1Router.use('/attendance', attendanceRoutes);
 
 module.exports = v1Router;

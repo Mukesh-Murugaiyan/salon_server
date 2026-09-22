@@ -170,6 +170,23 @@ Result: Only 1 Company, 1 Role, and 1 User are created. No dummy Owner, Receptio
 ```
 > Plan limits (`maxStaff`, `maxAppointments`) are strictly enforced server-side. Attempts to exceed plan limits return HTTP 400 with `error: "PLAN_LIMIT_EXCEEDED"`.
 
+### Attendance & Geo-Fencing (`attendance` module) — Ticket 9
+- `POST /api/v1/attendance/check-in` (`attendance:check_in`) — Submit GPS coordinates (`latitude`, `longitude`). Distance to salon is verified server-side via Haversine formula.
+- `GET /api/v1/attendance/today` (`attendance:check_in`) — Retrieve current user's check-in status for today (`hasCheckedIn: boolean`).
+- `GET /api/v1/attendance` (`attendance:view`) — List company attendance records with pagination, date, and user filtering.
+- `GET /api/v1/attendance/:id` (`attendance:view`) — Retrieve single attendance record strictly within tenant context.
+- `GET /api/v1/attendance/location` (authenticated) — Retrieve salon geo-fence coordinates (`latitude`, `longitude`, `allowedRadiusInMeters`).
+- `PUT /api/v1/attendance/location` (`companies:update`) — Update salon geo-fence coordinates and permitted radius.
+
+> **Geo-Fencing Invariant**: If distance from salon coordinates exceeds `allowedRadiusInMeters`, the API returns HTTP 403:
+```json
+{
+  "error": "OUT_OF_RANGE",
+  "message": "You are outside the permitted salon radius for check-in."
+}
+```
+> **Duplicate Check-In Invariant**: Compound unique index `{ companyId: 1, userId: 1, date: 1 }` prevents multiple check-ins on the same day (`400 DUPLICATE_CHECK_IN`). Missing/invalid coordinates return `400 VALIDATION_ERROR`.
+
 ---
 
 ## 5. Security & Isolation Invariants

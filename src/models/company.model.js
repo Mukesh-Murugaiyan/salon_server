@@ -44,6 +44,20 @@ const companySchema = new mongoose.Schema(
       default: 'EXPIRED',
       index: true,
     },
+    // Ticket 9 Geo-Fencing Location Fields
+    latitude: {
+      type: Number,
+      default: null,
+    },
+    longitude: {
+      type: Number,
+      default: null,
+    },
+    allowedRadiusInMeters: {
+      type: Number,
+      default: 100,
+      min: [1, 'Allowed radius must be at least 1 meter'],
+    },
   },
   {
     timestamps: true,

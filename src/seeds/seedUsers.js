@@ -40,6 +40,9 @@ const seedDatabase = async (options = {}) => {
         name: companyName,
         code: companyCode,
         isActive: true,
+        latitude: 12.9716,
+        longitude: 77.5946,
+        allowedRadiusInMeters: 200,
       });
       if (process.env.NODE_ENV !== 'test') {
         console.log(`✅ Created Company: ${company.name} [Code: ${company.code}] (${company._id})`);
@@ -47,6 +50,11 @@ const seedDatabase = async (options = {}) => {
     } else {
       company.name = companyName;
       company.isActive = true;
+      if (company.latitude === null || company.latitude === undefined) {
+        company.latitude = 12.9716;
+        company.longitude = 77.5946;
+        company.allowedRadiusInMeters = 200;
+      }
       await company.save();
       if (process.env.NODE_ENV !== 'test') {
         console.log(`ℹ️  Existing Company updated: ${company.name} [Code: ${company.code}] (${company._id})`);
