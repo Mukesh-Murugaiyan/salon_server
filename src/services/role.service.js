@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Role = require('../models/role.model');
 const { User } = require('../models/user.model');
 const { PERMISSION_CATALOG } = require('../constants/permissions');
@@ -14,7 +15,12 @@ class RoleService {
     const roles = await Role.find(query).sort({ createdAt: -1 });
 
     // Aggregate user counts per role for this salon (or globally for Super Admin)
-    const matchQuery = salonId ? { salonId } : {};
+    const matchQuery = {};
+    if (salonId) {
+      matchQuery.salonId = mongoose.Types.ObjectId.isValid(salonId)
+        ? new mongoose.Types.ObjectId(salonId)
+        : salonId;
+    }
     const userCounts = await User.aggregate([
       { $match: matchQuery },
       { $group: { _id: '$roleId', count: { $sum: 1 } } },
@@ -49,7 +55,8 @@ class RoleService {
    * @returns {Promise<{ role: Object, users: Array }>}
    */
   async getRoleById(roleId, salonId) {
-    const role = await Role.findOne({ _id: roleId, salonId });
+    const roleQuery = salonId ? { _id: roleId, $or: [{ salonId }, { salonId: null }] } : { _id: roleId };
+    const role = await Role.findOne(roleQuery);
     if (!role) {
       const err = new Error('Role not found.');
       err.status = 404;
@@ -57,7 +64,8 @@ class RoleService {
       throw err;
     }
 
-    const users = await User.find({ roleId: role._id, salonId })
+    const userQuery = salonId ? { roleId: role._id, salonId } : { roleId: role._id };
+    const users = await User.find(userQuery)
       .select('name email isActive createdAt')
       .sort({ name: 1 });
 
