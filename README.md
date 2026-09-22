@@ -107,10 +107,28 @@ Result: Only 1 Company, 1 Role, and 1 User are created. No dummy Owner, Receptio
 ### Dynamic Dashboard (`dashboard` module)
 - `GET /api/v1/dashboard/summary` (`dashboard:view`) — Live operational metrics scoped to company.
 
+### Client Management (`clients` module) — Ticket 4
+- `GET /api/v1/clients` (`clients:view`) — List clients scoped to company with search and pagination.
+- `POST /api/v1/clients` (`clients:create`) — Create new client. Enforces unique phone per company.
+- `GET /api/v1/clients/:id` (`clients:view`) — Get single client by ID.
+- `PUT /api/v1/clients/:id` (`clients:update`) — Update client profile details.
+- `DELETE /api/v1/clients/:id` (`clients:delete`) — Soft delete client (`isActive = false`).
+
+### Staff Management (`staff` module) — Ticket 5
+- `GET /api/v1/staff` (`staff:view`) — List salon staff scoped to company with search, role/title, and status filter.
+- `POST /api/v1/staff` (`staff:create`) — Create staff member (stylist, barber, colorist, etc.). Enforces unique phone per company.
+- `GET /api/v1/staff/:id` (`staff:view`) — Get staff member details by ID.
+- `PUT /api/v1/staff/:id` (`staff:update`) — Update staff member profile and specializations.
+- `PATCH /api/v1/staff/:id/status` (`staff:update`) — Toggle active/inactive status.
+- `DELETE /api/v1/staff/:id` (`staff:delete`) — Soft delete staff member (`isActive = false`).
+
+> **Architectural Note (Staff vs User)**: Staff members represent salon service providers (stylists, barbers, therapists, etc.) who deliver services. They are intentionally kept separate from `User` entities, which represent system login accounts. A staff member does NOT automatically have login access.
+
 ---
 
 ## 5. Security & Isolation Invariants
 
-- **Multi-Tenant Boundaries**: `req.user.companyId` is derived exclusively from the verified JWT and populated active database record.
+- **Multi-Tenant Boundaries**: `req.user.companyId` is derived exclusively from the verified JWT and populated active database record. Request body or query parameters specifying `companyId` are ignored/overridden.
 - **Permission Middleware**: `requirePermission(module, action)` evaluates `req.user.permissions.includes(`${module}:${action}`)`.
 - **Account Inactivity Checks**: Suspended users or inactive companies/roles receive immediate `403` responses.
+

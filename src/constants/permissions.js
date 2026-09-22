@@ -4,12 +4,13 @@
  * Dynamic RBAC Architecture:
  * - Module (Resource): The entity or functional area
  * - Action: The permitted operation (VIEW, CREATE, UPDATE, DELETE)
- * - Permission String: `${module}:${action}` (e.g., 'users:create', 'appointments:view')
+ * - Permission String: `${module}:${action}` (e.g., 'staff:create', 'clients:view')
  */
 
 const MODULES = {
   USERS: 'users',
   ROLES: 'roles',
+  STAFF: 'staff',
   APPOINTMENTS: 'appointments',
   CLIENTS: 'clients',
   SUBSCRIPTION: 'subscription',
@@ -30,15 +31,15 @@ const ACTIONS = {
  */
 const PERMISSION_CATALOG = [
   {
-    module: MODULES.USERS,
-    label: 'Users',
-    description: 'Manage staff and company users',
+    module: MODULES.STAFF,
+    label: 'Staff',
+    description: 'Manage stylists, service specialists, and salon employees',
     actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE, ACTIONS.DELETE],
   },
   {
-    module: MODULES.ROLES,
-    label: 'Roles & Permissions',
-    description: 'Manage security roles and permission assignments',
+    module: MODULES.CLIENTS,
+    label: 'Clients',
+    description: 'Client records, profiles, and history',
     actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE, ACTIONS.DELETE],
   },
   {
@@ -48,9 +49,15 @@ const PERMISSION_CATALOG = [
     actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE, ACTIONS.DELETE],
   },
   {
-    module: MODULES.CLIENTS,
-    label: 'Clients',
-    description: 'Client records, profiles, and history',
+    module: MODULES.USERS,
+    label: 'Users',
+    description: 'Manage system login accounts and company users',
+    actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE, ACTIONS.DELETE],
+  },
+  {
+    module: MODULES.ROLES,
+    label: 'Roles & Permissions',
+    description: 'Manage security roles and permission assignments',
     actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.UPDATE, ACTIONS.DELETE],
   },
   {
@@ -81,7 +88,7 @@ const PERMISSION_CATALOG = [
 
 /**
  * Returns a flattened array of all available permission strings in the system.
- * e.g., ['users:view', 'users:create', ..., 'plans:update']
+ * e.g., ['staff:view', 'staff:create', ..., 'plans:update']
  */
 const getAllPermissionStrings = () => {
   const permissions = [];
