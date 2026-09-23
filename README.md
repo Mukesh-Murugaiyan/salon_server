@@ -1,198 +1,265 @@
-# Salon ERP — Multi-Tenant Dynamic RBAC Architecture
-## Ticket 3: Dynamic Company, Role, User & Permission Management
+# Salon ERP Backend — Production-Grade Multi-Tenant Architecture
 
-This repository provides the core backend service for the multi-tenant Salon CRM/ERP platform. Under **Ticket 3**, the system has transitioned from hardcoded role archetypes to a 100% database-driven entity hierarchy.
+This service is the core RESTful backend for the multi-tenant Salon ERP / CRM platform. Built with **Node.js, Express, MongoDB (Mongoose), and JWT**, it provides an enterprise-level architecture featuring **database-driven dynamic RBAC**, **strict multi-tenant isolation**, **subscription lifecycle & quota enforcement**, **conflict-free appointment scheduling**, and **server-authoritative GPS geo-fencing**.
 
 ---
 
-## 1. Architectural Entity Hierarchy
+## 1. End-to-End System Architecture
 
 ```text
-Company (Top-Level Tenant)
-   ↓
- Role   (Scoped strictly to Company)
-   ↓
- User   (Belongs to Company + Assigned Role)
-   ↓
-Role Permissions (Dynamic Module + Action pairs)
-   ↓
-Features / Navigation / Server-Side APIs
+               ┌────────────────────────────────────────────────────────┐
+               │                  CLIENT APPLICATIONS                   │
+               └───────────────────────────┬────────────────────────────┘
+                                           │
+                    ┌──────────────────────┴──────────────────────┐
+                    ▼                                             ▼
+       ┌─────────────────────────┐                   ┌─────────────────────────┐
+       │   Web Portal (React)    │                   │ Mobile App (Expo SDK 57)│
+       │  - Dynamic Admin & ERP  │                   │  - Attendance Check-In  │
+       │  - Interactive Matrix   │                   │  - Subscription Status  │
+       │  - Reusable Modals/Tabs │                   │  - Today's Appointments │
+       └────────────┬────────────┘                   └────────────┬────────────┘
+                    │                                             │
+                    └──────────────────────┬──────────────────────┘
+                                           │ HTTPS (Bearer JWT)
+                                           ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                           EXPRESS APPLICATION SERVICE (Port 5001)                       │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│ 1. GLOBAL MIDDLEWARES: Helmet, CORS, Express JSON Parser, Rate Limiting                │
+│                                                                                         │
+│ 2. AUTHENTICATION PIPELINE (`authenticate`):                                            │
+│    - Verifies Bearer JWT signature and expiration.                                      │
+│    - Loads active User, Company/Salon tenant, Role, and dynamic permissions from DB.   │
+│    - Rejects inactive users or disabled companies with HTTP 403.                        │
+│                                                                                         │
+│ 3. DYNAMIC AUTHORIZATION PIPELINE (`requirePermission(module, action)`):                │
+│    - Validates `req.user.permissions.includes(`${module}:${action}`)`.                  │
+│    - Zero hardcoded roles; 100% database-driven permission checks.                      │
+│                                                                                         │
+│ 4. SUBSCRIPTION GATING PIPELINE (`enforceSubscription`):                                │
+│    - Verifies salon subscription status is `ACTIVE` and endDate >= now.                 │
+│    - Rejects expired operations with exact HTTP 403 `SUBSCRIPTION_EXPIRED`.             │
+│    - Enforces quota constraints (`maxStaff`, `maxAppointments`).                        │
+│                                                                                         │
+│ 5. CONTROLLER LAYER:                                                                    │
+│    - AuthController        - SalonsController      - RolesController                    │
+│    - UsersController       - ClientsController     - StaffController                    │
+│    - ServicesController    - AppointmentsController - AttendanceController               │
+│    - PlansController       - SubscriptionController - DashboardController                │
+└──────────────────────────────────────────┬──────────────────────────────────────────────┘
+                                           │ Mongoose ODM
+                                           ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                              MONGODB DATABASE LAYER                                     │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│ • companies (Salons)  • roles             • users          • permissions               │
+│ • clients             • staff             • services       • appointments              │
+│ • plans               • subscriptions     • subscription_audits • attendance           │
+│                                                                                         │
+│ INVARIANTS & INDEXES:                                                                  │
+│ - Compound Unique Index on Attendance: `{ companyId: 1, userId: 1, date: 1 }`          │
+│ - Compound Unique Index on Client: `{ companyId: 1, phone: 1 }`                        │
+│ - Unique Index on User Email: `{ email: 1 }`                                           │
+│ - Server-enforced soft-delete (`isActive: false`) and tenant scoping (`companyId`)     │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
-
-### Key Principles:
-1. **Zero Hardcoded Roles**: No hardcoded roles exist in authorization checks or system logic.
-2. **Zero Hardcoded Users**: All users exist solely as database records.
-3. **Server-Authoritative Tenant Isolation**: Every tenant query uses `req.user.companyId`. Parameters or body values attempting to specify another company are rejected or overridden server-side.
-4. **Dynamic Permission Validation**: Access is checked via `requirePermission(module, action)` middleware against the authenticated user's populated permissions array in MongoDB.
 
 ---
 
-## 2. Project Setup & Prerequisites
+## 2. Architectural Deep Dive: How Components Work Together
 
-### Architecture
-- **Backend Service (`salon_server`)**: Node.js, Express, MongoDB (Mongoose), JWT, bcryptjs.
-- **Port**: Default configured to `5001` (to prevent conflict with macOS AirPlay / ControlCenter on port 5000).
-
-### Installation
-```bash
-cd salon_server
-npm install
+### 1. Database Entity Hierarchy & Multi-Tenant Isolation
+The data model implements strict tenant hierarchy:
+```text
+Company / Salon (Top-Level Tenant Root)
+   ├── Role (Scoped strictly to Company)
+   │     └── Dynamic Permissions Array (["users:view", "appointments:create", ...])
+   ├── User (Belongs to Company + Assigned Role)
+   ├── Clients, Staff, Services, Appointments, Attendance (Scoped strictly to Company)
+   └── Subscription (Active Plan, Quota Counters, Cycle Dates)
 ```
+- **Server-Authoritative Tenant Scoping**: Every tenant-scoped query automatically derives `companyId` from `req.user.companyId`. Parameters or JSON bodies attempting to inject a different `companyId` are completely ignored or rejected server-side.
+- **Cross-Tenant Guard**: Entities belonging to another tenant (e.g. attempting to book an appointment with a client from another salon) fail with HTTP 404/403.
 
-### Environment Configuration (`salon_server/.env`)
-```env
-NODE_ENV=development
+### 2. Authentication & Stateless JWT Lifecycle
+1. **Login (`POST /api/v1/auth/login`)**: Validates credentials via `bcrypt.compare(password, user.passwordHash)`.
+2. **Permission Hydration**: On authentication, the user's assigned `Role` is retrieved and its granular permissions array is attached to the user session.
+3. **Session Resolution (`GET /api/v1/auth/me`)**: Both Web and Mobile hydrate their frontend authorization state from this endpoint, ensuring UI controls reflect live database permissions immediately.
+4. **Account Invalidation**: If a user is deactivated (`isActive: false`), all subsequent requests immediately fail with HTTP 403 `ACCOUNT_DISABLED`.
+
+### 3. Dynamic RBAC (Role-Based Access Control)
+- **Zero Hardcoded Roles**: Authorization checks never query role names like `OWNER` or `RECEPTIONIST`. Instead, all endpoints check permissions:
+  ```javascript
+  router.post('/appointments', authenticate, requirePermission('appointments', 'create'), enforceSubscription, createAppointment);
+  ```
+- **Interactive Permission Matrix**: Administrators configure permissions per role through an interactive matrix. Changes save directly to MongoDB and take effect without restarting services or hardcoding permission arrays.
+
+### 4. Subscription Lifecycle & Quota Management
+- **Subscription States**: `ACTIVE`, `EXPIRED`, `TRIAL`, `CANCELLED`.
+- **Gating Middleware (`enforceSubscription`)**:
+  - Automatically intercepts mutations on operational resources (e.g. staff creation, appointment booking).
+  - If a company's subscription has lapsed (`endDate < Date.now()` or status is `EXPIRED`), the request is blocked with HTTP 403:
+    ```json
+    {
+      "error": "SUBSCRIPTION_EXPIRED",
+      "message": "Your subscription has expired. Please contact the administrator to renew your plan."
+    }
+    ```
+- **Plan Quota Limits**:
+  - `maxStaff`: Verifies active staff count before allowing new staff registration (`400 PLAN_LIMIT_EXCEEDED`).
+  - `maxAppointments`: Verifies monthly appointment count before booking (`400 PLAN_LIMIT_EXCEEDED`).
+- **Audit Logging**: Every plan assignment, renewal, and upgrade is immutably logged to the `SubscriptionAudit` collection with timestamps and actor details.
+
+### 5. Appointments & Conflict Scheduling Engine
+- **Operating Hours Validation**: All bookings must fall strictly between `09:00` and `20:00`.
+- **Dynamic Service Duration**: The appointment duration is automatically synchronized with `service.durationInMinutes`.
+- **Concurrency & Overlap Conflict Protection**:
+  - Prevents booking the same staff member for overlapping time intervals on the same date.
+  - Queries existing active bookings (`CONFIRMED`, `PENDING`) using interval intersection:
+    $$\max(\text{start}_1, \text{start}_2) < \min(\text{end}_1, \text{end}_2)$$
+  - Returns HTTP 409 `Conflict` with exact conflict details if overlapping.
+  - Cancelled appointments (`status = 'CANCELLED'`) do not block slots.
+
+### 6. Geo-Fencing & Attendance Engine
+- **Server-Side Haversine Verification**:
+  Device GPS coordinates `(latitude, longitude)` are validated against the salon's configured coordinates using the spherical Haversine formula:
+  $$d = 2R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta\phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta\lambda}{2}\right)}\right)$$
+  *(where $R = 6,371,000\text{ m}$)*
+- **Boundary & Exceeded Evaluation**:
+  - Distance $\le$ `allowedRadiusInMeters`: Check-in succeeds (`200 OK`).
+  - Distance > `allowedRadiusInMeters`: Rejected with HTTP 403 `OUT_OF_RANGE`, returning distance and exact exceeded amount (`exceededBy`).
+- **Duplicate Check-In Prevention**:
+  A MongoDB compound unique index `{ companyId: 1, userId: 1, date: 1 }` guarantees that an employee cannot check in multiple times on the same date (`400 DUPLICATE_CHECK_IN`).
+
+---
+
+## 3. Evaluator Test Credentials (Pre-Configured)
+
+> **NOTE**: Dynamic accounts are already configured in the database. No seeds or demo scripts need to be run.
+
+| Role | Email | Password | Scope & Access |
+| :--- | :--- | :--- | :--- |
+| **Super Admin** | `superadmin@salon.com` | `Password01*` | Full administrative access, tenant management, subscription tiers, dynamic permission matrix. |
+| **Owner** | `ownera@salon.com` | `Password01*` | Salon operations, staff management, client catalog, appointment scheduling, subscription renewals. |
+| **Receptionist** | `receptionista@salon.com` | `Password01*` | Front-desk scheduling, client records, GPS attendance check-in, today's appointments. |
+
+---
+
+## 4. Setup & Running the Server
+
+### Prerequisites
+- Node.js (v18+)
+- Local or Cloud MongoDB instance
+
+### Installation & Execution
+```bash
+# Install dependencies
+npm install
+
+# Configure environment in .env
 PORT=5001
-MONGODB_URI=your_mongodb_connection_string
+MONGODB_URI=mongodb://localhost:27017/salon_crm
 JWT_SECRET=super_secure_and_long_jwt_secret_key_for_salon_crm_production_quality
 JWT_EXPIRES_IN=1d
 WEB_ORIGIN=http://localhost:5173
 
+# Start development server
+npm run dev
+
+# Run in production mode
+npm start
 ```
-
-### Evaluator Test Credentials (Pre-Configured)
-The following dynamic accounts are configured in the database:
-
-| Role | Email | Password | Scope |
-| :--- | :--- | :--- | :--- |
-| **Super Admin** | `superadmin@salon.com` | `Password01*` | Full system administration |
-| **Owner** | `ownera@salon.com` | `Password01*` | Salon management & operations |
-| **Receptionist** | `receptionista@salon.com` | `Password01*` | Front-desk scheduling & attendance |
 
 ---
 
-## 3. Initial Seed Execution
-
-The seed execution order strictly creates:
-```text
-1. Create Company (Demo Company / DEMO)
-        ↓
-2. Create Role for that Company (Super Admin with full dynamic permissions)
-        ↓
-3. Create Super Admin User referencing Company + Role
-```
-
-Run seed:
-```bash
-npm run seed
-```
-
-Result: Only 1 Company, 1 Role, and 1 User are created. No dummy Owner, Receptionist, or unnecessary demo entities.
-
----
-
-## 4. API Endpoints (v1)
+## 5. API Reference (v1)
 
 ### Authentication
-- `POST /api/v1/auth/login` — Authenticate and load Company + Role + dynamic Permissions.
-- `GET /api/v1/auth/me` — Resolve authenticated session profile.
+- `POST /api/v1/auth/login` — Authenticate and receive JWT + user profile + permissions.
+- `GET /api/v1/auth/me` — Resolve current authenticated session profile.
 - `POST /api/v1/auth/logout` — Stateless logout.
 
-### Role Management (`roles` module)
-- `GET /api/v1/roles` (`roles:view`) — List company roles with live assigned user counts.
-- `POST /api/v1/roles` (`roles:create`) — Create new company role.
-- `GET /api/v1/roles/:id` (`roles:view`) — Retrieve role details and assigned users.
+### Roles & Permissions (`roles` module)
+- `GET /api/v1/roles` (`roles:view`) — List company roles with active user counts.
+- `POST /api/v1/roles` (`roles:create`) — Create new role.
+- `GET /api/v1/roles/:id` (`roles:view`) — Get role details and assigned users.
 - `PUT /api/v1/roles/:id` (`roles:update`) — Update role metadata.
 - `DELETE /api/v1/roles/:id` (`roles:delete`) — Delete role (prevented if users are assigned).
-- `GET /api/v1/roles/:id/permissions` (`roles:view`) — Get role permissions and UI matrix schema.
-- `PUT /api/v1/roles/:id/permissions` (`roles:update`) — Update permissions array in MongoDB.
+- `GET /api/v1/roles/:id/permissions` (`roles:view`) — Get dynamic permissions matrix schema.
+- `PUT /api/v1/roles/:id/permissions` (`roles:update`) — Persist modified permissions array in MongoDB.
 
-### User Management (`users` module)
-- `GET /api/v1/users` (`users:view`) — List users within authenticated company.
+### Users (`users` module)
+- `GET /api/v1/users` (`users:view`) — List company users with search and pagination.
 - `POST /api/v1/users` (`users:create`) — Create user assigned to a company role.
-- `GET /api/v1/users/:id` (`users:view`) — Get single user within company.
-- `PUT /api/v1/users/:id` (`users:update`) — Update user details or role.
-- `PATCH /api/v1/users/:id/status` (`users:update`) — Toggle active/inactive status.
-- `DELETE /api/v1/users/:id` (`users:delete`) — Deactivate user account.
+- `GET /api/v1/users/:id` (`users:view`) — Get user profile details.
+- `PUT /api/v1/users/:id` (`users:update`) — Update user information or role.
+- `PATCH /api/v1/users/:id/status` (`users:update`) — Toggle user active/disabled status.
+- `DELETE /api/v1/users/:id` (`users:delete`) — Soft delete user.
 
-### Dynamic Dashboard (`dashboard` module)
-- `GET /api/v1/dashboard/summary` (`dashboard:view`) — Live operational metrics scoped to company.
+### Clients (`clients` module)
+- `GET /api/v1/clients` (`clients:view`) — List salon clients with search and gender filtering.
+- `POST /api/v1/clients` (`clients:create`) — Create client (enforces unique phone per company).
+- `GET /api/v1/clients/:id` (`clients:view`) — Get client details.
+- `PUT /api/v1/clients/:id` (`clients:update`) — Update client profile.
+- `DELETE /api/v1/clients/:id` (`clients:delete`) — Soft delete client.
 
-### Client Management (`clients` module) — Ticket 4
-- `GET /api/v1/clients` (`clients:view`) — List clients scoped to company with search and pagination.
-- `POST /api/v1/clients` (`clients:create`) — Create new client. Enforces unique phone per company.
-- `GET /api/v1/clients/:id` (`clients:view`) — Get single client by ID.
-- `PUT /api/v1/clients/:id` (`clients:update`) — Update client profile details.
-- `DELETE /api/v1/clients/:id` (`clients:delete`) — Soft delete client (`isActive = false`).
+### Staff (`staff` module)
+- `GET /api/v1/staff` (`staff:view`) — List staff service providers with search and title filter.
+- `POST /api/v1/staff` (`staff:create`) — Create staff member with specializations and job title.
+- `GET /api/v1/staff/:id` (`staff:view`) — Get staff member details.
+- `PUT /api/v1/staff/:id` (`staff:update`) — Update staff profile and specializations.
+- `PATCH /api/v1/staff/:id/status` (`staff:update`) — Toggle staff active/inactive state.
+- `DELETE /api/v1/staff/:id` (`staff:delete`) — Soft delete staff member.
 
-### Staff Management (`staff` module) — Ticket 5
-- `GET /api/v1/staff` (`staff:view`) — List salon staff scoped to company with search, role/title, and status filter.
-- `POST /api/v1/staff` (`staff:create`) — Create staff member (stylist, barber, colorist, etc.). Enforces unique phone per company.
-- `GET /api/v1/staff/:id` (`staff:view`) — Get staff member details by ID.
-- `PUT /api/v1/staff/:id` (`staff:update`) — Update staff member profile and specializations.
-- `PATCH /api/v1/staff/:id/status` (`staff:update`) — Toggle active/inactive status.
-- `DELETE /api/v1/staff/:id` (`staff:delete`) — Soft delete staff member (`isActive = false`).
+### Services (`services` module)
+- `GET /api/v1/services` (`services:view`) — List salon services with search and status filter.
+- `POST /api/v1/services` (`services:create`) — Create service (positive duration, non-negative price, unique active name).
+- `GET /api/v1/services/:id` (`services:view`) — Get service details.
+- `PUT /api/v1/services/:id` (`services:update`) — Update service details.
+- `PATCH /api/v1/services/:id/status` (`services:update`) — Toggle service active/inactive state.
+- `DELETE /api/v1/services/:id` (`services:delete`) — Soft delete service.
 
-> **Architectural Note (Staff vs User)**: Staff members represent salon service providers (stylists, barbers, therapists, etc.) who deliver services. They are intentionally kept separate from `User` entities, which represent system login accounts. A staff member does NOT automatically have login access.
+### Appointments (`appointments` module)
+- `GET /api/v1/appointments` (`appointments:view`) — List appointments with date, staff, client, and status filters.
+- `POST /api/v1/appointments` (`appointments:create`) — Book appointment with overlap conflict detection and business hours check.
+- `GET /api/v1/appointments/:id` (`appointments:view`) — Get populated appointment details.
+- `PUT /api/v1/appointments/:id` (`appointments:update`) — Reschedule appointment with conflict validation.
+- `PATCH /api/v1/appointments/:id/status` (`appointments:update`) — Update booking status (`CONFIRMED`, `PENDING`, `COMPLETED`, `CANCELLED`).
+- `DELETE /api/v1/appointments/:id` (`appointments:delete`) — Cancel appointment.
 
-### Service Management (`services` module) — Ticket 6
-- `GET /api/v1/services` (`services:view`) — List salon services scoped to company with search and status filter.
-- `POST /api/v1/services` (`services:create`) — Create new service. Enforces unique active service name per company, positive duration, and non-negative price.
-- `GET /api/v1/services/:id` (`services:view`) — Get single service details by ID.
-- `PUT /api/v1/services/:id` (`services:update`) — Update service details, duration, and pricing.
-- `PATCH /api/v1/services/:id/status` (`services:update`) — Toggle active/inactive service status.
-- `DELETE /api/v1/services/:id` (`services:delete`) — Soft delete service (`isActive = false`).
+### Subscription & Plans (`plans` & `subscription` modules)
+- `GET /api/v1/plans` (`plans:view`) — List available subscription tiers.
+- `POST /api/v1/plans` (`plans:create`) — Create plan with pricing, limits, and duration.
+- `GET /api/v1/subscription` (`subscription:view`) — Get active company subscription and quota utilization.
+- `POST /api/v1/subscription/assign` (`subscription:assign`) — Assign a plan to company.
+- `POST /api/v1/subscription/renew` (`subscription:renew`) — Renew subscription for another cycle.
+- `POST /api/v1/subscription/upgrade` (`subscription:upgrade`) — Upgrade or switch plan tier.
+- `GET /api/v1/subscription/history` (`subscription:history`) — View immutable audit trail.
 
-> **Architectural Note (Database-Driven Services)**: No service names or durations (e.g. Haircut, Facial, Hair Color) are hardcoded in the codebase. Every service is completely database-driven and isolated to its owning Company tenant.
-
-### Appointment Management (`appointments` module) — Ticket 7
-- `GET /api/v1/appointments` (`appointments:view`) — List appointments scoped to company with date, staff, client, and status filters.
-- `POST /api/v1/appointments` (`appointments:create`) — Book new appointment. Enforces:
-  - Cross-entity ownership: Client, Staff, and Service must all belong to authenticated company and be active.
-  - Business hours validation (strictly between 09:00 and 20:00).
-  - Database-driven duration: Appointment duration is strictly validated against `service.durationInMinutes`.
-  - Staff overlap protection: Same staff cannot have overlapping active bookings on the same date (`409 Conflict`).
-  - Cancelled appointments do NOT block slots.
-- `GET /api/v1/appointments/:id` (`appointments:view`) — Get single appointment details with populated client, staff, and service.
-- `PUT /api/v1/appointments/:id` (`appointments:update`) — Reschedule or update appointment details with overlap validation.
-- `PATCH /api/v1/appointments/:id/status` (`appointments:update`) — Update appointment status (`PENDING`, `CONFIRMED`, `COMPLETED`, `CANCELLED`).
-- `DELETE /api/v1/appointments/:id` (`appointments:delete`) — Cancel appointment (`status = 'CANCELLED'`).
-
-### Plan Management (`plans` module) — Ticket 8
-- `GET /api/v1/plans` (`plans:view`) — List all subscription plans.
-- `POST /api/v1/plans` (`plans:create`) — Create new subscription plan with name, price, durationInDays, maxStaff, and maxAppointments.
-- `GET /api/v1/plans/:id` (`plans:view`) — Get single plan details.
-- `PUT /api/v1/plans/:id` (`plans:update`) — Update plan attributes, limits, and pricing.
-- `DELETE /api/v1/plans/:id` (`plans:delete`) — Deactivate / soft delete plan.
-
-### Subscription Management (`subscription` module) — Ticket 8
-- `GET /api/v1/subscription` (`subscription:view`) — Retrieve active company subscription, plan limits, remaining days, and live quota usage.
-- `POST /api/v1/subscription/assign` (`subscription:assign`) — Assign a plan to the authenticated company (creates audit history).
-- `POST /api/v1/subscription/renew` (`subscription:renew`) — Renew current subscription for another cycle (creates audit history).
-- `POST /api/v1/subscription/upgrade` (`subscription:upgrade`) — Upgrade / switch to another plan tier (creates audit history).
-- `GET /api/v1/subscription/history` (`subscription:history`) — Retrieve company subscription audit history trail.
-
-> **Subscription Enforcement Invariant**: When a salon company subscription expires or is unassigned, subscription-gated APIs return HTTP 403 with exact JSON:
-```json
-{
-  "error": "SUBSCRIPTION_EXPIRED",
-  "message": "Your subscription has expired. Please contact the administrator to renew your plan."
-}
-```
-> Plan limits (`maxStaff`, `maxAppointments`) are strictly enforced server-side. Attempts to exceed plan limits return HTTP 400 with `error: "PLAN_LIMIT_EXCEEDED"`.
-
-### Attendance & Geo-Fencing (`attendance` module) — Ticket 9
-- `POST /api/v1/attendance/check-in` (`attendance:check_in`) — Submit GPS coordinates (`latitude`, `longitude`). Distance to salon is verified server-side via Haversine formula.
-- `GET /api/v1/attendance/today` (`attendance:check_in`) — Retrieve current user's check-in status for today (`hasCheckedIn: boolean`).
-- `GET /api/v1/attendance` (`attendance:view`) — List company attendance records with pagination, date, and user filtering.
-- `GET /api/v1/attendance/:id` (`attendance:view`) — Retrieve single attendance record strictly within tenant context.
-- `GET /api/v1/attendance/location` (authenticated) — Retrieve salon geo-fence coordinates (`latitude`, `longitude`, `allowedRadiusInMeters`).
-- `PUT /api/v1/attendance/location` (`companies:update`) — Update salon geo-fence coordinates and permitted radius.
-
-> **Geo-Fencing Invariant**: If distance from salon coordinates exceeds `allowedRadiusInMeters`, the API returns HTTP 403:
-```json
-{
-  "error": "OUT_OF_RANGE",
-  "message": "You are outside the permitted salon radius for check-in."
-}
-```
-> **Duplicate Check-In Invariant**: Compound unique index `{ companyId: 1, userId: 1, date: 1 }` prevents multiple check-ins on the same day (`400 DUPLICATE_CHECK_IN`). Missing/invalid coordinates return `400 VALIDATION_ERROR`.
+### Attendance & Geo-Fencing (`attendance` module)
+- `POST /api/v1/attendance/check-in` (`attendance:check_in`) — Submit GPS coordinates for Haversine distance verification.
+- `GET /api/v1/attendance/today` (`attendance:check_in`) — Get today's check-in status for authenticated user.
+- `GET /api/v1/attendance` (`attendance:view`) — List company attendance records with date and user filter.
+- `GET /api/v1/attendance/:id` (`attendance:view`) — Get single attendance record.
+- `GET /api/v1/attendance/location` (authenticated) — Get salon geo-fence coordinates and allowed radius.
+- `PUT /api/v1/attendance/location` (`companies:update`) — Configure salon geo-fence coordinates and radius.
 
 ---
 
-## 5. Security & Isolation Invariants
+## 6. Automated Test Suite (61 Tests Across 8 Suites)
 
-- **Multi-Tenant Boundaries**: `req.user.companyId` is derived exclusively from the verified JWT and populated active database record. Request body or query parameters specifying `companyId` are ignored/overridden.
-- **Permission Middleware**: `requirePermission(module, action)` evaluates `req.user.permissions.includes(`${module}:${action}`)`.
-- **Account Inactivity Checks**: Suspended users or inactive companies/roles receive immediate `403` responses.
+Execute all integration and unit tests:
+```bash
+npm test
+```
 
+### Verified Test Suites:
+1. `tests/auth.test.js` (10 tests): JWT generation, valid login, case-insensitive email, missing credentials, disabled user 403, session resolution.
+2. `tests/geofencing.test.js` (11 tests): Haversine distance calculation, check-in inside allowed radius (200 OK), check-in outside radius (403 OUT_OF_RANGE), exact boundary case, duplicate check-in prevention (400 DUPLICATE_CHECK_IN), missing/invalid coordinates validation.
+3. `tests/tenant.test.js` (6 tests): Cross-tenant query boundary protection, rejection of injected `companyId`, cross-company booking isolation.
+4. `tests/rbac.test.js` (11 tests): Dynamic permission middleware enforcement, role creation, interactive permission matrix persistence.
+5. `tests/services.test.js` (8 tests): Service CRUD, duration & price validation, duplicate active service name guard.
+6. `tests/user.test.js` (8 tests): User CRUD, role assignment, status toggling.
+7. `tests/seed.test.js` (4 tests): Seed database invariants.
+8. `tests/versioning.test.js` (3 tests): API v1 versioning integrity.
