@@ -1,4 +1,5 @@
 const attendanceService = require('../services/attendance.service');
+const { getSalonIdFromUser } = require('../utils/tenant');
 
 class AttendanceController {
   /**
@@ -7,7 +8,7 @@ class AttendanceController {
    */
   async checkIn(req, res, next) {
     try {
-      const salonId = req.user.salonId;
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
       const userId = req.user.id || req.user._id;
       const { latitude, longitude } = req.body;
 
@@ -29,12 +30,36 @@ class AttendanceController {
   }
 
   /**
+   * Processes employee check-out.
+   * POST /api/attendance/check-out
+   */
+  async checkOut(req, res, next) {
+    try {
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
+      const userId = req.user.id || req.user._id;
+
+      const attendance = await attendanceService.checkOut({
+        salonId,
+        userId,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Check-out successful.',
+        attendance,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Retrieves today's attendance status for authenticated user.
    * GET /api/attendance/today
    */
   async getTodayStatus(req, res, next) {
     try {
-      const salonId = req.user.salonId;
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
       const userId = req.user.id || req.user._id;
 
       const result = await attendanceService.getTodayAttendance({
@@ -46,6 +71,7 @@ class AttendanceController {
         success: true,
         attendance: result.attendance,
         hasCheckedIn: !!result.attendance,
+        hasCheckedOut: !!(result.attendance && result.attendance.checkOutTime),
         salonLocation: result.salonLocation,
       });
     } catch (error) {
@@ -59,14 +85,15 @@ class AttendanceController {
    */
   async listAttendance(req, res, next) {
     try {
-      const salonId = req.user.salonId;
-      const { date, userId, status, page, limit } = req.query;
+      const salonId = getSalonIdFromUser(req) || req.user.salonId || req.query.salonId;
+      const { date, userId, status, search, page, limit } = req.query;
 
       const result = await attendanceService.listAttendance({
         salonId,
         date,
         userId,
         status,
+        search,
         page,
         limit,
       });
@@ -81,12 +108,37 @@ class AttendanceController {
   }
 
   /**
+   * Deletes an attendance record strictly scoped to tenant.
+   * Resets the employee's check-in state so they can check in again.
+   * DELETE /api/attendance/:id
+   */
+  async deleteAttendance(req, res, next) {
+    try {
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
+      const { id } = req.params;
+
+      const attendance = await attendanceService.deleteAttendance({
+        salonId,
+        id,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Attendance record deleted successfully.',
+        attendance,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Retrieves single attendance record by ID.
    * GET /api/attendance/:id
    */
   async getAttendance(req, res, next) {
     try {
-      const salonId = req.user.salonId;
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
       const { id } = req.params;
 
       const attendance = await attendanceService.getAttendanceById({
@@ -109,7 +161,7 @@ class AttendanceController {
    */
   async getLocation(req, res, next) {
     try {
-      const salonId = req.user.salonId;
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
       const location = await attendanceService.getSalonLocation(salonId);
 
       return res.status(200).json({
@@ -127,7 +179,7 @@ class AttendanceController {
    */
   async updateLocation(req, res, next) {
     try {
-      const salonId = req.user.salonId;
+      const salonId = getSalonIdFromUser(req) || req.user.salonId;
       const { latitude, longitude, allowedRadiusInMeters } = req.body;
 
       const location = await attendanceService.updateSalonLocation(salonId, {

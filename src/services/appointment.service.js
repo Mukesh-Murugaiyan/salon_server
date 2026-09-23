@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Appointment = require('../models/appointment.model');
 const Client = require('../models/client.model');
 const Staff = require('../models/staff.model');
@@ -24,6 +25,25 @@ class AppointmentService {
    * @returns {Promise<{ client: Object, staff: Object, service: Object }>}
    */
   async _validateEntities(salonId, clientId, staffId, serviceId) {
+    if (!mongoose.Types.ObjectId.isValid(clientId)) {
+      const err = new Error('Invalid Client ID provided.');
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    if (!mongoose.Types.ObjectId.isValid(staffId)) {
+      const err = new Error('Invalid Staff ID provided.');
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+      const err = new Error('Invalid Service ID provided.');
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
     const [client, staff, service] = await Promise.all([
       Client.findOne({ _id: clientId, salonId }),
       Staff.findOne({ _id: staffId, salonId }),
@@ -69,56 +89,68 @@ class AppointmentService {
       throw err;
     }
 
+    const duration = Number(service.durationInMinutes);
+    if (!duration || isNaN(duration) || duration <= 0) {
+      const err = new Error(`Service '${service.name}' has an invalid duration (${service.durationInMinutes} mins). Duration must be greater than 0.`);
+      err.status = 400;
+      err.code = 'INVALID_SERVICE_DURATION';
+      throw err;
+    }
+
     return { client, staff, service };
   }
 
   /**
-   * Validates business hours based on salon's openingTime/closingTime and service duration alignment.
+   * Validates service duration and strictly calculates endTime from startTime + serviceDurationInMinutes.
+   * Client-provided end times are completely disregarded in favor of server-calculated values.
+   * Ensures the appointment is scheduled entirely within salon working hours.
    *
    * @private
    * @param {string} startTime
-   * @param {string} [endTime]
    * @param {number} serviceDurationInMinutes
    * @param {{ opening: string, closing: string }} salonHours
    * @returns {{ startTime: string, endTime: string }}
    */
-  _validateTiming(startTime, endTime, serviceDurationInMinutes, salonHours) {
-    const startMins = timeToMinutes(startTime);
-    if (isNaN(startMins)) {
+  _validateTiming(startTime, serviceDurationInMinutes, salonHours) {
+    // If called with legacy 4 arguments: (startTime, endTime, serviceDurationInMinutes, salonHours)
+    if (arguments.length >= 4) {
+      serviceDurationInMinutes = arguments[2];
+      salonHours = arguments[3];
+    }
+
+    if (!startTime || typeof startTime !== 'string' || !/^\d{2}:\d{2}$/.test(startTime.trim())) {
       const err = new Error("Start time must be formatted as 'HH:mm'.");
       err.status = 400;
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
 
-    let endMins;
-    if (endTime) {
-      endMins = timeToMinutes(endTime);
-      if (isNaN(endMins)) {
-        const err = new Error("End time must be formatted as 'HH:mm'.");
-        err.status = 400;
-        err.code = 'VALIDATION_ERROR';
-        throw err;
-      }
-      if (endMins <= startMins) {
-        const err = new Error('Start time must be before end time.');
-        err.status = 400;
-        err.code = 'VALIDATION_ERROR';
-        throw err;
-      }
-      const requestedDuration = endMins - startMins;
-      if (requestedDuration !== serviceDurationInMinutes) {
-        const err = new Error(
-          `Requested duration (${requestedDuration} mins) does not match the service duration (${serviceDurationInMinutes} mins).`
-        );
-        err.status = 400;
-        err.code = 'DURATION_MISMATCH';
-        throw err;
-      }
-    } else {
-      endMins = startMins + serviceDurationInMinutes;
-      endTime = minutesToTime(endMins);
+    const trimmedStartTime = startTime.trim();
+    const startMins = timeToMinutes(trimmedStartTime);
+    if (isNaN(startMins) || startMins < 0 || startMins >= 24 * 60) {
+      const err = new Error("Start time must be a valid time of day formatted as 'HH:mm'.");
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
     }
+
+    const duration = Number(serviceDurationInMinutes);
+    if (!duration || isNaN(duration) || duration <= 0) {
+      const err = new Error('Service duration must be a positive number of minutes.');
+      err.status = 400;
+      err.code = 'INVALID_SERVICE_DURATION';
+      throw err;
+    }
+
+    const endMins = startMins + duration;
+    if (endMins > 24 * 60) {
+      const err = new Error('Appointment cannot extend past midnight.');
+      err.status = 400;
+      err.code = 'OUTSIDE_BUSINESS_HOURS';
+      throw err;
+    }
+
+    const endTime = minutesToTime(endMins);
 
     // Validate against salon's specific working hours
     const openingMins = timeToMinutes(salonHours.opening);
@@ -132,7 +164,7 @@ class AppointmentService {
       throw err;
     }
 
-    return { startTime, endTime };
+    return { startTime: trimmedStartTime, endTime };
   }
 
   /**
@@ -174,6 +206,50 @@ class AppointmentService {
         );
         err.status = 409;
         err.code = 'STAFF_OVERLAP_CONFLICT';
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * Checks for overlapping active appointments for the specified client on a date.
+   * Cancelled appointments are strictly excluded.
+   *
+   * @private
+   * @param {string} salonId
+   * @param {string} clientId
+   * @param {string} date
+   * @param {string} startTime
+   * @param {string} endTime
+   * @param {string} [excludeAppointmentId=null]
+   */
+  async _checkClientOverlap(salonId, clientId, date, startTime, endTime, excludeAppointmentId = null) {
+    const query = {
+      salonId,
+      clientId,
+      date,
+      status: { $ne: APPOINTMENT_STATUS.CANCELLED },
+    };
+
+    if (excludeAppointmentId) {
+      query._id = { $ne: excludeAppointmentId };
+    }
+
+    const existingAppointments = await Appointment.find(query);
+    const requestedStart = timeToMinutes(startTime);
+    const requestedEnd = timeToMinutes(endTime);
+
+    for (const app of existingAppointments) {
+      const existingStart = timeToMinutes(app.startTime);
+      const existingEnd = timeToMinutes(app.endTime);
+
+      // Overlap formula: existing.start < requested.end AND existing.end > requested.start
+      if (existingStart < requestedEnd && existingEnd > requestedStart) {
+        const err = new Error(
+          `Schedule conflict: The client already has an active appointment (${app.startTime}–${app.endTime}) on ${date}.`
+        );
+        err.status = 409;
+        err.code = 'CLIENT_OVERLAP_CONFLICT';
         throw err;
       }
     }
@@ -342,7 +418,7 @@ class AppointmentService {
    * @returns {Promise<Object>}
    */
   async createAppointment(salonId, data) {
-    const { clientId, staffId, serviceId, date, startTime, endTime, notes, status } = data;
+    const { clientId, staffId, serviceId, date, startTime, notes, status } = data;
 
     if (!clientId || !staffId || !serviceId || !date || !startTime) {
       const err = new Error('Client, Staff, Service, Date, and Start Time are required fields.');
@@ -350,6 +426,14 @@ class AppointmentService {
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
+
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+      const err = new Error("Date must be formatted as 'YYYY-MM-DD'.");
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    const cleanDate = date.trim();
 
     // 0. Enforce active subscription and appointment quota limit
     await subscriptionService.validateAppointmentLimit(salonId);
@@ -364,11 +448,8 @@ class AppointmentService {
     // 2. Verify cross-entity tenant isolation and active status
     const { client, staff, service } = await this._validateEntities(salonId, clientId, staffId, serviceId);
 
-    // 3. Validate timing against salon's working hours
-    const timing = this._validateTiming(startTime, endTime, service.durationInMinutes, salonHours);
-
-    // 4. Prevent overlapping active bookings for this staff member
-    await this._checkStaffOverlap(salonId, staffId, date, timing.startTime, timing.endTime);
+    // 3. Validate timing against salon's working hours and strictly calculate endTime from service duration
+    const timing = this._validateTiming(startTime, service.durationInMinutes, salonHours);
 
     // 4. Validate initial status
     const appStatus = status ? status.toUpperCase() : APPOINTMENT_STATUS.CONFIRMED;
@@ -379,13 +460,19 @@ class AppointmentService {
       throw err;
     }
 
-    // 5. Create appointment
+    // 5. Prevent overlapping active bookings for both staff and client (cancelled appointments do not block)
+    if (appStatus !== APPOINTMENT_STATUS.CANCELLED) {
+      await this._checkStaffOverlap(salonId, staffId, cleanDate, timing.startTime, timing.endTime);
+      await this._checkClientOverlap(salonId, clientId, cleanDate, timing.startTime, timing.endTime);
+    }
+
+    // 6. Create appointment
     const appointment = await Appointment.create({
       salonId,
       clientId,
       staffId,
       serviceId,
-      date,
+      date: cleanDate,
       startTime: timing.startTime,
       endTime: timing.endTime,
       status: appStatus,
@@ -404,6 +491,13 @@ class AppointmentService {
    * @returns {Promise<Object>}
    */
   async updateAppointment(appointmentId, salonId, data) {
+    if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+      const err = new Error('Appointment not found or does not belong to your salon.');
+      err.status = 404;
+      err.code = 'APPOINTMENT_NOT_FOUND';
+      throw err;
+    }
+
     const appointment = await Appointment.findOne({ _id: appointmentId, salonId });
     if (!appointment) {
       const err = new Error('Appointment not found or does not belong to your salon.');
@@ -412,12 +506,34 @@ class AppointmentService {
       throw err;
     }
 
-    const clientId = data.clientId || appointment.clientId;
-    const staffId = data.staffId || appointment.staffId;
-    const serviceId = data.serviceId || appointment.serviceId;
-    const date = data.date || appointment.date;
-    const startTime = data.startTime || appointment.startTime;
-    const requestedEndTime = data.endTime;
+    const clientId = data.clientId !== undefined ? data.clientId : appointment.clientId.toString();
+    const staffId = data.staffId !== undefined ? data.staffId : appointment.staffId.toString();
+    const serviceId = data.serviceId !== undefined ? data.serviceId : appointment.serviceId.toString();
+    const date = data.date !== undefined ? data.date : appointment.date;
+    const startTime = data.startTime !== undefined ? data.startTime : appointment.startTime;
+
+    if (!clientId || !staffId || !serviceId || !date || !startTime) {
+      const err = new Error('Client, Staff, Service, Date, and Start Time cannot be empty.');
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+      const err = new Error("Date must be formatted as 'YYYY-MM-DD'.");
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+    const cleanDate = date.trim();
+
+    const targetStatus = data.status ? data.status.toUpperCase() : appointment.status;
+    if (!APPOINTMENT_STATUSES.includes(targetStatus)) {
+      const err = new Error(`Invalid status '${data.status}'. Must be one of: ${APPOINTMENT_STATUSES.join(', ')}.`);
+      err.status = 400;
+      err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
 
     // 1. Fetch salon working hours
     const salon = await Salon.findById(salonId).select('openingTime closingTime');
@@ -429,41 +545,39 @@ class AppointmentService {
     // 2. Validate entities
     const { service } = await this._validateEntities(salonId, clientId, staffId, serviceId);
 
-    // 3. Validate timing against salon's working hours
-    const timing = this._validateTiming(startTime, requestedEndTime, service.durationInMinutes, salonHours);
+    // 3. Validate timing against salon's working hours and strictly calculate endTime from service duration
+    const timing = this._validateTiming(startTime, service.durationInMinutes, salonHours);
 
-    // 3. Overlap check (if status is not CANCELLED)
-    const targetStatus = data.status ? data.status.toUpperCase() : appointment.status;
+    // 4. Overlap checks for both staff and client (excluding current appointmentId, cancelled do not block)
     if (targetStatus !== APPOINTMENT_STATUS.CANCELLED) {
       await this._checkStaffOverlap(
         salonId,
         staffId,
-        date,
+        cleanDate,
+        timing.startTime,
+        timing.endTime,
+        appointmentId
+      );
+      await this._checkClientOverlap(
+        salonId,
+        clientId,
+        cleanDate,
         timing.startTime,
         timing.endTime,
         appointmentId
       );
     }
 
-    if (data.status) {
-      if (!APPOINTMENT_STATUSES.includes(targetStatus)) {
-        const err = new Error(`Invalid status '${data.status}'.`);
-        err.status = 400;
-        err.code = 'VALIDATION_ERROR';
-        throw err;
-      }
-      appointment.status = targetStatus;
-    }
-
     appointment.clientId = clientId;
     appointment.staffId = staffId;
     appointment.serviceId = serviceId;
-    appointment.date = date;
+    appointment.date = cleanDate;
     appointment.startTime = timing.startTime;
     appointment.endTime = timing.endTime;
+    appointment.status = targetStatus;
 
     if (data.notes !== undefined) {
-      appointment.notes = data.notes.trim();
+      appointment.notes = (data.notes || '').trim();
     }
 
     await appointment.save();
@@ -480,6 +594,13 @@ class AppointmentService {
    * @returns {Promise<Object>}
    */
   async cancelAppointment(appointmentId, salonId) {
+    if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+      const err = new Error('Appointment not found or does not belong to your salon.');
+      err.status = 404;
+      err.code = 'APPOINTMENT_NOT_FOUND';
+      throw err;
+    }
+
     const appointment = await Appointment.findOne({ _id: appointmentId, salonId });
     if (!appointment) {
       const err = new Error('Appointment not found or does not belong to your salon.');
@@ -508,6 +629,13 @@ class AppointmentService {
    * @returns {Promise<Object>}
    */
   async updateStatus(appointmentId, salonId, newStatus) {
+    if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+      const err = new Error('Appointment not found or does not belong to your salon.');
+      err.status = 404;
+      err.code = 'APPOINTMENT_NOT_FOUND';
+      throw err;
+    }
+
     const normalized = (newStatus || '').toUpperCase();
     if (!APPOINTMENT_STATUSES.includes(normalized)) {
       const err = new Error(`Invalid status '${newStatus}'. Must be one of: ${APPOINTMENT_STATUSES.join(', ')}.`);
@@ -524,11 +652,19 @@ class AppointmentService {
       throw err;
     }
 
-    // If un-cancelling, verify overlap protection
+    // If un-cancelling or changing to an active status, verify both staff and client overlap protection
     if (appointment.status === APPOINTMENT_STATUS.CANCELLED && normalized !== APPOINTMENT_STATUS.CANCELLED) {
       await this._checkStaffOverlap(
         salonId,
         appointment.staffId,
+        appointment.date,
+        appointment.startTime,
+        appointment.endTime,
+        appointmentId
+      );
+      await this._checkClientOverlap(
+        salonId,
+        appointment.clientId,
         appointment.date,
         appointment.startTime,
         appointment.endTime,
