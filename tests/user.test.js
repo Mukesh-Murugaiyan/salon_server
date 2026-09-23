@@ -22,6 +22,26 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
     salonA = await Salon.create({ name: 'Salon A', email: 'a@salon.com' });
     salonB = await Salon.create({ name: 'Salon B', email: 'b@salon.com' });
 
+    const Role = require('../src/models/role.model');
+    const adminRole = await Role.create({
+      name: 'Super Admin',
+      code: 'SUPER_ADMIN',
+      salonId: null,
+      permissions: ['*'],
+    });
+    const ownerRole = await Role.create({
+      name: 'Owner',
+      code: 'OWNER',
+      salonId: null,
+      permissions: ['users:view', 'users:create', 'users:update', 'users:delete'],
+    });
+    const receptionistRole = await Role.create({
+      name: 'Receptionist',
+      code: 'RECEPTIONIST',
+      salonId: null,
+      permissions: ['appointments:view'],
+    });
+
     const passwordHash = await hashPassword('Password@123');
 
     // Admin
@@ -29,44 +49,45 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
       name: 'Super Admin',
       email: 'admin@platform.com',
       passwordHash,
-      role: ROLES.SUPER_ADMIN.value,
+      roleId: adminRole._id,
       salonId: null,
       isActive: true,
     });
-    adminToken = signToken({ userId: admin._id.toString(), role: admin.role, salonId: null });
+    adminToken = signToken({ userId: admin._id.toString(), role: 'SUPER_ADMIN', roleId: adminRole._id.toString(), salonId: null });
 
     // Owner of Salon A
     const ownerA = await User.create({
       name: 'Owner A',
-      email: 'ownerA@salona.com',
+      email: 'ownera@salona.com',
       passwordHash,
-      role: ROLES.OWNER.value,
+      roleId: ownerRole._id,
       salonId: salonA._id,
       isActive: true,
     });
-    ownerAToken = signToken({ userId: ownerA._id.toString(), role: ownerA.role, salonId: salonA._id.toString() });
+    ownerAToken = signToken({ userId: ownerA._id.toString(), role: 'OWNER', roleId: ownerRole._id.toString(), salonId: salonA._id.toString() });
 
     // Receptionist in Salon A
     userA1 = await User.create({
       name: 'Receptionist A1',
-      email: 'recA1@salona.com',
+      email: 'reca1@salona.com',
       passwordHash,
-      role: ROLES.RECEPTIONIST.value,
+      roleId: receptionistRole._id,
       salonId: salonA._id,
       isActive: true,
     });
     receptionistAToken = signToken({
       userId: userA1._id.toString(),
-      role: userA1.role,
+      role: 'RECEPTIONIST',
+      roleId: receptionistRole._id.toString(),
       salonId: salonA._id.toString(),
     });
 
     // User in Salon B
     userB1 = await User.create({
       name: 'Receptionist B1',
-      email: 'recB1@salonb.com',
+      email: 'recb1@salonb.com',
       passwordHash,
-      role: ROLES.RECEPTIONIST.value,
+      roleId: receptionistRole._id,
       salonId: salonB._id,
       isActive: true,
     });
@@ -82,10 +103,10 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
       expect(Array.isArray(res.body.users)).toBe(true);
 
       // Should include Owner A and Receptionist A1, but NOT Receptionist B1
-      const emails = res.body.users.map((u) => u.email);
-      expect(emails).toContain('ownerA@salona.com');
-      expect(emails).toContain('recA1@salona.com');
-      expect(emails).not.toContain('recB1@salonb.com');
+      const emails = res.body.users.map((u) => u.email.toLowerCase());
+      expect(emails).toContain('ownera@salona.com');
+      expect(emails).toContain('reca1@salona.com');
+      expect(emails).not.toContain('recb1@salonb.com');
     });
 
     it('SUPER_ADMIN can see all users across all tenants', async () => {
@@ -94,10 +115,10 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(res.status).toBe(200);
-      const emails = res.body.users.map((u) => u.email);
+      const emails = res.body.users.map((u) => u.email.toLowerCase());
       expect(emails).toContain('admin@platform.com');
-      expect(emails).toContain('ownerA@salona.com');
-      expect(emails).toContain('recB1@salonb.com');
+      expect(emails).toContain('ownera@salona.com');
+      expect(emails).toContain('recb1@salonb.com');
     });
   });
 
@@ -108,7 +129,7 @@ describe('User Module API Tests (Modular Routes & Services)', () => {
         .set('Authorization', `Bearer ${ownerAToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.user.email).toBe('recA1@salona.com');
+      expect(res.body.user.email.toLowerCase()).toBe('reca1@salona.com');
     });
 
     it('OWNER is rejected with 403 when trying to view user from another salon', async () => {

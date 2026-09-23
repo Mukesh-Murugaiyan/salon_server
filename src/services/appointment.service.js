@@ -228,30 +228,30 @@ class AppointmentService {
       notes: a.notes || '',
       client: a.clientId
         ? {
-            id: a.clientId._id.toString(),
-            _id: a.clientId._id.toString(),
-            name: a.clientId.name,
-            phone: a.clientId.phone,
-            email: a.clientId.email,
-          }
+          id: a.clientId._id.toString(),
+          _id: a.clientId._id.toString(),
+          name: a.clientId.name,
+          phone: a.clientId.phone,
+          email: a.clientId.email,
+        }
         : null,
       staff: a.staffId
         ? {
-            id: a.staffId._id.toString(),
-            _id: a.staffId._id.toString(),
-            name: a.staffId.name,
-            title: a.staffId.title,
-            specialization: a.staffId.specialization,
-          }
+          id: a.staffId._id.toString(),
+          _id: a.staffId._id.toString(),
+          name: a.staffId.name,
+          title: a.staffId.title,
+          specialization: a.staffId.specialization,
+        }
         : null,
       service: a.serviceId
         ? {
-            id: a.serviceId._id.toString(),
-            _id: a.serviceId._id.toString(),
-            name: a.serviceId.name,
-            durationInMinutes: a.serviceId.durationInMinutes,
-            price: a.serviceId.price,
-          }
+          id: a.serviceId._id.toString(),
+          _id: a.serviceId._id.toString(),
+          name: a.serviceId.name,
+          durationInMinutes: a.serviceId.durationInMinutes,
+          price: a.serviceId.price,
+        }
         : null,
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
@@ -289,30 +289,30 @@ class AppointmentService {
       notes: app.notes || '',
       client: app.clientId
         ? {
-            id: app.clientId._id.toString(),
-            _id: app.clientId._id.toString(),
-            name: app.clientId.name,
-            phone: app.clientId.phone,
-            email: app.clientId.email,
-          }
+          id: app.clientId._id.toString(),
+          _id: app.clientId._id.toString(),
+          name: app.clientId.name,
+          phone: app.clientId.phone,
+          email: app.clientId.email,
+        }
         : null,
       staff: app.staffId
         ? {
-            id: app.staffId._id.toString(),
-            _id: app.staffId._id.toString(),
-            name: app.staffId.name,
-            title: app.staffId.title,
-            specialization: app.staffId.specialization,
-          }
+          id: app.staffId._id.toString(),
+          _id: app.staffId._id.toString(),
+          name: app.staffId.name,
+          title: app.staffId.title,
+          specialization: app.staffId.specialization,
+        }
         : null,
       service: app.serviceId
         ? {
-            id: app.serviceId._id.toString(),
-            _id: app.serviceId._id.toString(),
-            name: app.serviceId.name,
-            durationInMinutes: app.serviceId.durationInMinutes,
-            price: app.serviceId.price,
-          }
+          id: app.serviceId._id.toString(),
+          _id: app.serviceId._id.toString(),
+          name: app.serviceId.name,
+          durationInMinutes: app.serviceId.durationInMinutes,
+          price: app.serviceId.price,
+        }
         : null,
       createdAt: app.createdAt,
       updatedAt: app.updatedAt,

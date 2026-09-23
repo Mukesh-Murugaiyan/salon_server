@@ -16,7 +16,10 @@ const requirePermission = (moduleName, actionName) => {
     const requiredPermission = `${moduleName}:${actionName}`.toLowerCase();
     const userPermissions = (req.user.permissions || []).map((p) => p.toLowerCase());
 
-    const hasAccess = userPermissions.includes(requiredPermission);
+    const hasAccess =
+      userPermissions.includes('*') ||
+      userPermissions.includes(`${moduleName.toLowerCase()}:*`) ||
+      userPermissions.includes(requiredPermission);
 
     if (!hasAccess) {
       return res.status(403).json({
@@ -45,7 +48,12 @@ const requireAnyPermission = (...permissions) => {
     const userPermissions = (req.user.permissions || []).map((p) => p.toLowerCase());
     const hasAny = permissions.some((perm) => {
       const normalized = (typeof perm === 'string' ? perm : `${perm.module}:${perm.action}`).toLowerCase();
-      return userPermissions.includes(normalized);
+      const [mod] = normalized.split(':');
+      return (
+        userPermissions.includes('*') ||
+        userPermissions.includes(`${mod}:*`) ||
+        userPermissions.includes(normalized)
+      );
     });
 
     if (!hasAny) {

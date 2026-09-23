@@ -47,19 +47,21 @@ class UserService {
    * @returns {Promise<Object>}
    */
   async getUserById(targetUserId, salonId) {
-    const query = { _id: targetUserId };
-    if (salonId) {
-      query.salonId = salonId;
-    }
-
-    const user = await User.findOne(query)
+    const user = await User.findById(targetUserId)
       .populate('salonId')
       .populate('roleId');
 
     if (!user) {
       const err = new Error('User not found.');
       err.status = 404;
-      err.code = 'USER_NOT_FOUND';
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+
+    if (salonId && user.salonId && user.salonId._id.toString() !== salonId.toString()) {
+      const err = new Error('Access denied to user in different salon.');
+      err.status = 403;
+      err.code = 'FORBIDDEN';
       throw err;
     }
 
@@ -74,13 +76,41 @@ class UserService {
    * @returns {Promise<Object>} Created safe user
    */
   async createUser(salonId, payload) {
-    const { name, email, password, roleId, isActive } = payload;
+    const { name, email, password, isActive } = payload;
+    let resolvedRoleId = payload.roleId;
+
+    if (!resolvedRoleId && payload.role) {
+      const Role = require('../models/role.model');
+      const foundRole = await Role.findOne({
+        $or: [{ code: payload.role }, { name: payload.role }],
+      });
+      if (foundRole) {
+        resolvedRoleId = foundRole._id.toString();
+      }
+    }
+
     const targetSalonId = salonId || payload.salonId || null;
 
-    if (!name || !email || !password || !roleId) {
+    if (!name || !email || !password || !resolvedRoleId) {
       const err = new Error('Name, email, password, and role are required.');
       err.status = 400;
       err.code = 'VALIDATION_ERROR';
+      throw err;
+    }
+
+    const Role = require('../models/role.model');
+    const roleDoc = await Role.findById(resolvedRoleId);
+    if (!roleDoc) {
+      const err = new Error('Selected role does not exist.');
+      err.status = 400;
+      err.code = 'INVALID_ROLE';
+      throw err;
+    }
+
+    if (salonId && roleDoc.code === 'SUPER_ADMIN') {
+      const err = new Error('Owners cannot create Super Admin users.');
+      err.status = 403;
+      err.code = 'FORBIDDEN';
       throw err;
     }
 
@@ -95,19 +125,6 @@ class UserService {
       throw err;
     }
 
-    // Verify role exists and is active (can be salon-specific or global)
-    const roleQuery = { _id: roleId };
-    if (targetSalonId) {
-      roleQuery.$or = [{ salonId: targetSalonId }, { salonId: null }];
-    }
-    const role = await Role.findOne(roleQuery);
-    if (!role) {
-      const err = new Error('Selected role does not exist.');
-      err.status = 400;
-      err.code = 'INVALID_ROLE';
-      throw err;
-    }
-
     const passwordHash = await hashPassword(password);
 
     const newUser = await User.create({
@@ -115,8 +132,8 @@ class UserService {
       email: normalizedEmail,
       passwordHash,
       salonId: targetSalonId,
-      roleId: role._id,
-      isActive: isActive !== undefined ? Boolean(isActive) : true,
+      roleId: resolvedRoleId,
+      isActive: isActive !== undefined ? isActive : true,
     });
 
     const populatedUser = await User.findById(newUser._id)

@@ -60,14 +60,16 @@ class AuthService {
       throw err;
     }
 
-    const salonIdStr = user.salonId ? user.salonId._id.toString() : null;
-    const roleIdStr = user.roleId ? user.roleId._id.toString() : null;
+    const salonIdStr = user.salonId ? (user.salonId._id ? user.salonId._id.toString() : user.salonId.toString()) : null;
+    const roleIdStr = user.roleId ? (user.roleId._id ? user.roleId._id.toString() : user.roleId.toString()) : null;
+    const roleCode = user.roleId?.code || (typeof user.role === 'object' ? user.role?.code : user.role);
 
-    // Generate JWT containing identifiers: userId, salonId, roleId
+    // Generate JWT containing identifiers: userId, salonId, roleId, role
     const token = signToken({
       userId: user._id.toString(),
       salonId: salonIdStr,
       roleId: roleIdStr,
+      role: roleCode,
     });
 
     return {

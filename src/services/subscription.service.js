@@ -40,7 +40,7 @@ class SubscriptionService {
 
     // Quota counts
     const staffCount = await Staff.countDocuments({ salonId, isActive: true });
-    
+
     // Count active appointments within current subscription cycle
     const appointmentQuery = {
       salonId,
@@ -61,15 +61,15 @@ class SubscriptionService {
       daysRemaining,
       plan: plan
         ? {
-            id: plan._id.toString(),
-            _id: plan._id.toString(),
-            name: plan.name,
-            description: plan.description,
-            price: plan.price,
-            durationInDays: plan.durationInDays,
-            maxStaff: plan.maxStaff,
-            maxAppointments: plan.maxAppointments,
-          }
+          id: plan._id.toString(),
+          _id: plan._id.toString(),
+          name: plan.name,
+          description: plan.description,
+          price: plan.price,
+          durationInDays: plan.durationInDays,
+          maxStaff: plan.maxStaff,
+          maxAppointments: plan.maxAppointments,
+        }
         : null,
       usage: {
         staffCount,
@@ -151,7 +151,7 @@ class SubscriptionService {
 
     const action = salon.currentPlanId ? 'UPGRADE' : 'ASSIGN';
     const startDate = startDateString ? new Date(startDateString) : new Date();
-    
+
     // Ensure valid date
     if (isNaN(startDate.getTime())) {
       const err = new Error('Please provide a valid subscription start date.');
@@ -243,7 +243,7 @@ class SubscriptionService {
 
     const plan = salon.currentPlanId;
     const now = new Date();
-    
+
     // If currently active and end date is in the future, extend from current end date
     const baseDate =
       salon.subscriptionEndDate && new Date(salon.subscriptionEndDate) > now
@@ -293,7 +293,7 @@ class SubscriptionService {
 
     const plan = salon.currentPlanId;
     const now = new Date();
-    
+
     // If startDateString is provided, use it, else calculate baseDate
     let startDate;
     if (startDateString) {
@@ -391,14 +391,14 @@ class SubscriptionService {
       salonId: h.salonId,
       plan: h.planId
         ? {
-            id: h.planId._id.toString(),
-            _id: h.planId._id.toString(),
-            name: h.planId.name,
-            price: h.planId.price,
-            durationInDays: h.planId.durationInDays,
-            maxStaff: h.planId.maxStaff,
-            maxAppointments: h.planId.maxAppointments,
-          }
+          id: h.planId._id.toString(),
+          _id: h.planId._id.toString(),
+          name: h.planId.name,
+          price: h.planId.price,
+          durationInDays: h.planId.durationInDays,
+          maxStaff: h.planId.maxStaff,
+          maxAppointments: h.planId.maxAppointments,
+        }
         : null,
       startDate: h.startDate,
       endDate: h.endDate,

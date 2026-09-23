@@ -13,6 +13,7 @@ const signToken = (payload) => {
   const safePayload = {
     userId: payload.userId,
     role: payload.role,
+    roleId: payload.roleId,
     salonId: payload.salonId || null,
   };
 

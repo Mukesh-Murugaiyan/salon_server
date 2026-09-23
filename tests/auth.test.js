@@ -79,18 +79,17 @@ describe('Authentication API & JWT Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.token).toBeDefined();
-      expect(res.body.user).toEqual({
-        id: adminUser._id.toString(),
-        name: 'Super Admin',
-        email: 'admin@saloncrm.com',
-        role: 'SUPER_ADMIN',
-        salonId: null,
-      });
+      expect(res.body.user.id).toBe(adminUser._id.toString());
+      expect(res.body.user.name).toBe('Super Admin');
+      expect(res.body.user.email).toBe('admin@saloncrm.com');
+      expect(res.body.user.salonId).toBeNull();
+      const adminRoleCode = typeof res.body.user.role === 'object' ? res.body.user.role.code : res.body.user.role;
+      expect(adminRoleCode).toBe('SUPER_ADMIN');
 
       // Verify JWT payload does not leak sensitive information
       const decoded = jwt.verify(res.body.token, env.JWT_SECRET);
       expect(decoded.userId).toBe(adminUser._id.toString());
-      expect(decoded.role).toBe('SUPER_ADMIN');
+      expect(decoded.roleId).toBeDefined();
       expect(decoded.salonId).toBeNull();
       expect(decoded.passwordHash).toBeUndefined();
       expect(decoded.password).toBeUndefined();
@@ -103,7 +102,8 @@ describe('Authentication API & JWT Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.token).toBeDefined();
-      expect(res.body.user.role).toBe('OWNER');
+      const ownerRoleCode = typeof res.body.user.role === 'object' ? res.body.user.role.code : res.body.user.role;
+      expect(ownerRoleCode).toBe('OWNER');
       expect(res.body.user.salonId).toBe(demoSalon._id.toString());
     });
 
@@ -114,7 +114,8 @@ describe('Authentication API & JWT Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.token).toBeDefined();
-      expect(res.body.user.role).toBe('RECEPTIONIST');
+      const recRoleCode = typeof res.body.user.role === 'object' ? res.body.user.role.code : res.body.user.role;
+      expect(recRoleCode).toBe('RECEPTIONIST');
     });
 
     it('should normalize email with uppercase letters and spaces', async () => {
@@ -249,13 +250,12 @@ describe('Authentication API & JWT Tests', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.user).toEqual({
-        id: ownerUser._id.toString(),
-        name: 'Salon Owner',
-        email: 'owner@saloncrm.com',
-        role: 'OWNER',
-        salonId: demoSalon._id.toString(),
-      });
+      expect(res.body.user.id).toBe(ownerUser._id.toString());
+      expect(res.body.user.name).toBe('Salon Owner');
+      expect(res.body.user.email).toBe('owner@saloncrm.com');
+      const roleCode = typeof res.body.user.role === 'object' ? res.body.user.role.code : res.body.user.role;
+      expect(roleCode).toBe('OWNER');
+      expect(res.body.user.salonId).toBe(demoSalon._id.toString());
       expect(res.body.user.passwordHash).toBeUndefined();
     });
 

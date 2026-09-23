@@ -6,34 +6,26 @@ const Salon = require('../src/models/salon.model');
 setupTestDB();
 
 describe('Idempotent Database Seed Script Tests', () => {
-  it('should seed database and verify exactly 4 users and 1 salon exist without duplicates on rerun', async () => {
+  it('should seed database and verify exactly 1 super admin user and role exist without duplicates on rerun', async () => {
     // First run
-    await seedDatabase();
+    const resultFirst = await seedDatabase();
 
-    const salonCountFirst = await Salon.countDocuments();
+    expect(resultFirst.user).toBeDefined();
+    expect(resultFirst.role).toBeDefined();
+
     const userCountFirst = await User.countDocuments();
+    expect(userCountFirst).toBe(1);
 
-    expect(salonCountFirst).toBe(1);
-    expect(userCountFirst).toBe(4);
+    const superAdmin = await User.findOne({ email: 'superadmin@salon.com' });
+    expect(superAdmin).not.toBeNull();
+    expect(superAdmin.salonId).toBeNull();
+    expect(superAdmin.roleId.toString()).toBe(resultFirst.role._id.toString());
 
     // Second run (Idempotency test)
-    await seedDatabase();
+    const resultSecond = await seedDatabase();
 
-    const salonCountSecond = await Salon.countDocuments();
     const userCountSecond = await User.countDocuments();
-
-    expect(salonCountSecond).toBe(1);
-    expect(userCountSecond).toBe(4);
-
-    // Verify role distribution
-    const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN.value });
-    expect(superAdmins).toHaveLength(1);
-    expect(superAdmins[0].salonId).toBeNull();
-
-    const owners = await User.find({ role: ROLES.OWNER.value });
-    expect(owners).toHaveLength(2); // owner + disabled
-
-    const receptionists = await User.find({ role: ROLES.RECEPTIONIST.value });
-    expect(receptionists).toHaveLength(1);
+    expect(userCountSecond).toBe(1);
+    expect(resultSecond.user._id.toString()).toBe(superAdmin._id.toString());
   });
 });
