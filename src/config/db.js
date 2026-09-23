@@ -1,61 +1,63 @@
 const mongoose = require('mongoose');
 const env = require('./env');
 
-let isConnected = false;
-let memoryServerInstance = null;
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = {
+    conn: null,
+    promise: null,
+  };
+}
 
 const connectDB = async (customUri) => {
-  if (mongoose.connection.readyState === 1) {
-    return mongoose.connection;
+  if (cached.conn) {
+    return cached.conn;
   }
 
-  let uri = customUri || env.MONGODB_URI;
+  const uri = customUri || env.MONGODB_URI;
 
-  // Seamless fallback/developer mode: support in-memory MongoDB if configured or requested
-  if (process.env.USE_MEMORY_DB === 'true' || uri === 'memory') {
-    try {
-      const { MongoMemoryServer } = require('mongodb-memory-server');
-      memoryServerInstance = await MongoMemoryServer.create();
-      uri = memoryServerInstance.getUri();
-      console.log(`[Database] Initialized in-memory MongoDB instance: ${uri}`);
-    } catch (err) {
-      console.warn('[Database] Could not initialize in-memory MongoDB:', err.message);
-    }
+  if (!uri) {
+    throw new Error('MONGODB_URI is not configured');
   }
 
-  try {
-    const conn = await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-    });
+  if (!cached.promise) {
+    cached.promise = mongoose
+      .connect(uri, {
+        bufferCommands: false,
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+      })
+      .then((mongooseInstance) => {
+        console.log(
+          `[Database] MongoDB connected: ${mongooseInstance.connection.host}`
+        );
 
-    isConnected = true;
-    if (env.NODE_ENV !== 'test') {
-      console.log(`[Database] MongoDB connected: ${conn.connection.host}`);
-    }
+        return mongooseInstance;
+      })
+      .catch((error) => {
+        cached.promise = null;
 
-    return conn;
-  } catch (error) {
-    console.error(`[Database] Error connecting to MongoDB: ${error.message}`);
-    if (env.NODE_ENV !== 'test') {
-      console.error('[Database] Tip: To run without local MongoDB installed, run with USE_MEMORY_DB=true');
-      process.exit(1);
-    }
-    throw error;
+        console.error(
+          `[Database] MongoDB connection failed: ${error.message}`
+        );
+
+        throw error;
+      });
   }
+
+  cached.conn = await cached.promise;
+
+  return cached.conn;
 };
 
 const disconnectDB = async () => {
-  if (isConnected) {
+  if (mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();
-    isConnected = false;
-    if (memoryServerInstance) {
-      await memoryServerInstance.stop();
-      memoryServerInstance = null;
-    }
-    if (env.NODE_ENV !== 'test') {
-      console.log('[Database] MongoDB disconnected cleanly');
-    }
   }
+
+  cached.conn = null;
+  cached.promise = null;
 };
 
 module.exports = {
