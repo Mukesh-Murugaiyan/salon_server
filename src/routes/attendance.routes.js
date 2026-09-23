@@ -1,7 +1,7 @@
 const express = require('express');
 const attendanceController = require('../controllers/attendance.controller');
 const { authenticate } = require('../middleware/auth.middleware');
-const { requirePermission } = require('../middleware/permission.middleware');
+const { requirePermission, requireAnyPermission } = require('../middleware/permission.middleware');
 const { MODULES, ACTIONS } = require('../constants/permissions');
 
 const router = express.Router();
@@ -18,7 +18,10 @@ router.post(
 // Get current user's check-in status for today
 router.get(
   '/today',
-  requirePermission(MODULES.ATTENDANCE, ACTIONS.CHECK_IN),
+  requireAnyPermission(
+    `${MODULES.ATTENDANCE}:${ACTIONS.CHECK_IN}`,
+    `${MODULES.ATTENDANCE}:${ACTIONS.VIEW}`
+  ),
   (req, res, next) => attendanceController.getTodayStatus(req, res, next)
 );
 
