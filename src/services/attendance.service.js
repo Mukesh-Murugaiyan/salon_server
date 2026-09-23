@@ -73,12 +73,14 @@ class AttendanceService {
 
     // 5. Enforce geo-fencing: reject if out of permitted radius
     if (distance > allowedRadius) {
+      const exceededBy = Math.round((distance - allowedRadius) * 100) / 100;
       const error = new Error('You are outside the permitted salon radius for check-in.');
       error.status = 403;
       error.code = 'OUT_OF_RANGE';
       error.details = {
-        distance: Math.round(distance),
+        distance: Math.round(distance * 100) / 100,
         allowedRadius,
+        exceededBy,
       };
       throw error;
     }
@@ -101,17 +103,30 @@ class AttendanceService {
   }
 
   /**
-   * Retrieves today's check-in status for the authenticated user.
+   * Retrieves today's check-in status and salon location configuration for the authenticated user.
    */
   async getTodayAttendance({ salonId, userId }) {
-    const todayDate = new Date().toISOString().slice(0, 10);
-    const attendance = await Attendance.findOne({
-      salonId,
-      userId,
-      date: todayDate,
-    }).populate('userId', 'name email');
+    const todayDate = DateTime.getTodayUtcDateString();
+    const [attendance, salon] = await Promise.all([
+      Attendance.findOne({
+        salonId,
+        userId,
+        date: todayDate,
+      }).populate('userId', 'name email'),
+      Salon.findById(salonId).select('latitude longitude allowedRadiusInMeters name'),
+    ]);
 
-    return attendance;
+    return {
+      attendance,
+      salonLocation: salon
+        ? {
+            latitude: salon.latitude !== null && salon.latitude !== undefined ? Number(salon.latitude) : null,
+            longitude: salon.longitude !== null && salon.longitude !== undefined ? Number(salon.longitude) : null,
+            allowedRadius: salon.allowedRadiusInMeters || AppConfig.GEOFENCING.DEFAULT_ALLOWED_RADIUS_METERS,
+            salonName: salon.name,
+          }
+        : null,
+    };
   }
 
   /**

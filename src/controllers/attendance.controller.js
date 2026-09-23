@@ -37,15 +37,16 @@ class AttendanceController {
       const salonId = req.user.salonId;
       const userId = req.user.id || req.user._id;
 
-      const attendance = await attendanceService.getTodayAttendance({
+      const result = await attendanceService.getTodayAttendance({
         salonId,
         userId,
       });
 
       return res.status(200).json({
         success: true,
-        attendance,
-        hasCheckedIn: !!attendance,
+        attendance: result.attendance,
+        hasCheckedIn: !!result.attendance,
+        salonLocation: result.salonLocation,
       });
     } catch (error) {
       next(error);

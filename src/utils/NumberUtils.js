@@ -81,18 +81,27 @@ class NumberUtils {
    * @returns {number} Distance in meters rounded to 2 decimal places
    */
   static calculateDistance(lat1, lon1, lat2, lon2) {
+    const nLat1 = Number(lat1);
+    const nLon1 = Number(lon1);
+    const nLat2 = Number(lat2);
+    const nLon2 = Number(lon2);
+
+    if (nLat1 === nLat2 && nLon1 === nLon2) {
+      return 0;
+    }
+
     const R = 6371000; // Earth radius in meters
     const toRad = (deg) => (deg * Math.PI) / 180;
 
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
+    const dLat = toRad(nLat2 - nLat1);
+    const dLon = toRad(nLon2 - nLon1);
 
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+      Math.cos(toRad(nLat1)) *
+        Math.cos(toRad(nLat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const distance = R * c;

@@ -96,7 +96,7 @@ class DashboardService {
         isActive: true,
       }),
       // Fetch salon details
-      Salon.findById(tenantId).select('subscriptionStatus name code openingTime closingTime'),
+      Salon.findById(tenantId).select('subscriptionStatus name code openingTime closingTime latitude longitude allowedRadiusInMeters'),
     ]);
 
     const entityName = salon?.name || user?.salon?.name || 'My Salon';
@@ -114,6 +114,13 @@ class DashboardService {
       salonName: entityName,
       openingTime,
       closingTime,
+      salonLocation: salon
+        ? {
+            latitude: salon.latitude !== null && salon.latitude !== undefined ? Number(salon.latitude) : null,
+            longitude: salon.longitude !== null && salon.longitude !== undefined ? Number(salon.longitude) : null,
+            allowedRadius: salon.allowedRadiusInMeters || AppConfig.GEOFENCING.DEFAULT_ALLOWED_RADIUS_METERS,
+          }
+        : null,
     };
   }
 }

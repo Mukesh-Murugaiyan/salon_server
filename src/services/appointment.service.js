@@ -211,6 +211,21 @@ class AppointmentService {
       query.status = filter.status.toUpperCase();
     }
 
+    if (filter.search && filter.search.trim()) {
+      const searchRegex = new RegExp(filter.search.trim(), 'i');
+      const [matchingClients, matchingStaff, matchingServices] = await Promise.all([
+        Client.find({ salonId, $or: [{ name: searchRegex }, { phone: searchRegex }, { email: searchRegex }] }).select('_id'),
+        Staff.find({ salonId, $or: [{ name: searchRegex }, { phone: searchRegex }] }).select('_id'),
+        Service.find({ salonId, name: searchRegex }).select('_id'),
+      ]);
+      query.$or = [
+        { clientId: { $in: matchingClients.map((c) => c._id) } },
+        { staffId: { $in: matchingStaff.map((s) => s._id) } },
+        { serviceId: { $in: matchingServices.map((s) => s._id) } },
+        { notes: searchRegex },
+      ];
+    }
+
     const appointments = await Appointment.find(query)
       .populate('clientId', 'name phone email')
       .populate('staffId', 'name title specialization')

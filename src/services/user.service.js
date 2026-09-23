@@ -31,6 +31,14 @@ class UserService {
       query.isActive = filter.isActive === 'true' || filter.isActive === true;
     }
 
+    if (filter.search && filter.search.trim()) {
+      const searchRegex = new RegExp(filter.search.trim(), 'i');
+      query.$or = [
+        { name: searchRegex },
+        { email: searchRegex },
+      ];
+    }
+
     const users = await User.find(query)
       .populate('salonId')
       .populate('roleId')
