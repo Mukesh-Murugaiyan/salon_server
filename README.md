@@ -67,7 +67,100 @@ This service is the core RESTful backend for the multi-tenant Salon ERP / CRM pl
 
 ---
 
-## 2. Architectural Deep Dive: How Components Work Together
+## 2. End-to-End Multi-Tenant Provisioning & Operational Flow
+
+```text
+                    ┌──────────────────────────┐
+                    │  1. SUPER ADMIN USER     │
+                    │  Create / Seed Admin     │
+                    └────────────┬─────────────┘
+                                 │
+                                 ▼
+                    ┌──────────────────────────┐
+                    │  2. CREATE PLANS         │
+                    │  • Basic                 │
+                    │  • Professional          │
+                    └────────────┬─────────────┘
+                                 │
+                                 ▼
+              ┌──────────────────┴──────────────────┐
+              │                                     │
+              ▼                                     ▼
+   ┌─────────────────────┐              ┌─────────────────────┐
+   │      3. SALON A     │              │      4. SALON B     │
+   │   Create Salon      │              │   Create Salon      │
+   └──────────┬──────────┘              └──────────┬──────────┘
+              │                                     │
+              ▼                                     ▼
+   ┌─────────────────────┐              ┌─────────────────────┐
+   │ Assign Subscription │              │ Assign Subscription │
+   │      to Salon A     │              │      to Salon B     │
+   └──────────┬──────────┘              └──────────┬──────────┘
+              │                                     │
+              └──────────────────┬──────────────────┘
+                                 ▼
+                    ┌──────────────────────────┐
+                    │  5. CREATE RBAC ROLES    │
+                    │                          │
+                    │  • ADMIN                 │
+                    │  • OWNER                 │
+                    │  • RECEPTIONIST          │
+                    └────────────┬─────────────┘
+                                 │
+                                 ▼
+                    ┌──────────────────────────┐
+                    │  6. CREATE USERS         │
+                    │                          │
+                    │  Salon A                 │
+                    │  ├─ Owner                │
+                    │  └─ Receptionist         │
+                    │                          │
+                    │  Salon B                 │
+                    │  ├─ Owner                │
+                    │  └─ Receptionist         │
+                    └────────────┬─────────────┘
+                                 │
+                                 ▼
+              ┌──────────────────┴──────────────────┐
+              │                                     │
+              ▼                                     ▼
+   ┌─────────────────────┐              ┌─────────────────────┐
+   │   7. SALON A OWNER  │              │   8. SALON B OWNER  │
+   │                     │              │                     │
+   │ Create Services     │              │ Create Services     │
+   │ Create Staff        │              │ Create Staff        │
+   └──────────┬──────────┘              └─────────────────────┘
+              │
+              ▼
+   ┌──────────────────────────┐
+   │ 9. SALON A RECEPTIONIST  │
+   │                          │
+   │ Create Clients           │
+   │ Create Appointments      │
+   └────────────┬─────────────┘
+                │
+                ▼
+   ┌──────────────────────────┐
+   │ 10. MOBILE APP           │
+   │                          │
+   │ Login                    │
+   │ View Today's Appointments│
+   │ GPS Check-In             │
+   │ Check-Out                │
+   └────────────┬─────────────┘
+                │
+                ▼
+   ┌──────────────────────────┐
+   │ 11. WEB ATTENDANCE       │
+   │                          │
+   │ View Attendance          │
+   │ Delete Attendance        │
+   └──────────────────────────┘
+```
+
+---
+
+## 3. Architectural Deep Dive: How Components Work Together
 
 ### 1. Database Entity Hierarchy & Multi-Tenant Isolation
 The data model implements strict tenant hierarchy:
@@ -134,19 +227,19 @@ Company / Salon (Top-Level Tenant Root)
 
 ---
 
-## 3. Evaluator Test Credentials (Pre-Configured)
+## 4. Evaluator Test Credentials (Pre-Configured)
 
 > **NOTE**: Dynamic accounts are already configured in the database. No seeds or demo scripts need to be run.
 
 | Role | Email | Password | Scope & Access |
 | :--- | :--- | :--- | :--- |
 | **Super Admin** | `superadmin@salon.com` | `Password01*` | Full administrative access, tenant management, subscription tiers, dynamic permission matrix. |
-| **Owner** | `ownera@salon.com` | `Password01*` | Salon operations, staff management, client catalog, appointment scheduling, subscription renewals. |
-| **Receptionist** | `receptionista@salon.com` | `Password01*` | Front-desk scheduling, client records, GPS attendance check-in, today's appointments. |
+| **Owner** | `owner@salona.com` | `Password01*` | Salon operations, staff management, client catalog, appointment scheduling, subscription renewals. |
+| **Receptionist** | `receptionist@salona.com` | `Password01*` | Front-desk scheduling, client records, GPS attendance check-in, today's appointments. |
 
 ---
 
-## 4. Setup & Running the Server
+## 5. Setup & Running the Server
 
 ### Prerequisites
 - Node.js (v18+)
@@ -173,7 +266,7 @@ npm start
 
 ---
 
-## 5. API Reference (v1)
+## 6. API Reference (v1)
 
 ### Authentication
 - `POST /api/v1/auth/login` — Authenticate and receive JWT + user profile + permissions.
@@ -247,7 +340,7 @@ npm start
 
 ---
 
-## 6. Automated Test Suite (61 Tests Across 8 Suites)
+## 7. Automated Test Suite (61 Tests Across 8 Suites)
 
 Execute all integration and unit tests:
 ```bash
