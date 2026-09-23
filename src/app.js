@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const env = require('./config/env');
+const { connectDB } = require('./config/db');
 const mainRoutes = require('./routes/mainRoutes');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
 
@@ -31,6 +32,16 @@ app.use(
 // Express request body parser with strict limit
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Ensure MongoDB connection before API routes
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Mount all modular API routes
 app.use('/api', mainRoutes);
