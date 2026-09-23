@@ -48,15 +48,16 @@ JWT_SECRET=super_secure_and_long_jwt_secret_key_for_salon_crm_production_quality
 JWT_EXPIRES_IN=1d
 WEB_ORIGIN=http://localhost:5173
 
-# Initial Seed Configuration
-SEED_COMPANY_NAME=Demo Company
-SEED_COMPANY_CODE=DEMO
-SEED_ROLE_NAME=Super Admin
-SEED_ROLE_CODE=SUPER_ADMIN
-SEED_ADMIN_NAME=Super Admin
-SEED_ADMIN_EMAIL=superadmin@salon.com
-SEED_ADMIN_PASSWORD=Admin@123
 ```
+
+### Evaluator Test Credentials (Pre-Configured)
+The following dynamic accounts are configured in the database:
+
+| Role | Email | Password | Scope |
+| :--- | :--- | :--- | :--- |
+| **Super Admin** | `superadmin@salon.com` | `Password01*` | Full system administration |
+| **Owner** | `ownera@salon.com` | `Password01*` | Salon management & operations |
+| **Receptionist** | `receptionista@salon.com` | `Password01*` | Front-desk scheduling & attendance |
 
 ---
 
