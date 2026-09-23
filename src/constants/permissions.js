@@ -101,7 +101,7 @@ const PERMISSION_CATALOG = [
     module: MODULES.ATTENDANCE,
     label: 'Attendance',
     description: 'Employee check-in and attendance tracking with geo-fencing',
-    actions: [ACTIONS.VIEW, ACTIONS.CHECK_IN],
+    actions: [ACTIONS.VIEW, ACTIONS.DELETE],
   },
 ];
 

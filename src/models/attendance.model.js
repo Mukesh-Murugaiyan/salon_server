@@ -25,6 +25,10 @@ const attendanceSchema = new mongoose.Schema(
       default: Date.now,
       required: [true, 'Check-in time is required'],
     },
+    checkOutTime: {
+      type: Date,
+      default: null,
+    },
     latitude: {
       type: String,
       required: [true, 'Check-in latitude is required'],

@@ -1,5 +1,6 @@
 const Attendance = require('../models/attendance.model');
 const Salon = require('../models/salon.model');
+const { User } = require('../models/user.model');
 const NumberUtils = require('../utils/NumberUtils');
 const Validation = require('../utils/Validation');
 const DateTime = require('../utils/DateTime');
@@ -103,6 +104,50 @@ class AttendanceService {
   }
 
   /**
+   * Processes employee check-out for today's attendance.
+   *
+   * @param {Object} params
+   * @param {string} params.salonId - Authenticated salon ID
+   * @param {string} params.userId - Authenticated user ID
+   * @returns {Promise<Object>} Updated attendance record with checkOutTime
+   */
+  async checkOut({ salonId, userId }) {
+    if (!salonId) {
+      const error = new Error('Salon ID is required for check-out.');
+      error.status = 400;
+      error.code = 'SALON_REQUIRED';
+      throw error;
+    }
+
+    const todayDate = DateTime.getTodayUtcDateString();
+    const attendance = await Attendance.findOne({
+      salonId,
+      userId,
+      date: todayDate,
+    });
+
+    if (!attendance) {
+      const error = new Error('You must check in first before checking out.');
+      error.status = 400;
+      error.code = 'NOT_CHECKED_IN';
+      throw error;
+    }
+
+    if (attendance.checkOutTime) {
+      const error = new Error('You have already checked out for today.');
+      error.status = 400;
+      error.code = 'ALREADY_CHECKED_OUT';
+      throw error;
+    }
+
+    attendance.checkOutTime = new Date();
+    await attendance.save();
+    await attendance.populate('userId', 'name email');
+
+    return attendance;
+  }
+
+  /**
    * Retrieves today's check-in status and salon location configuration for the authenticated user.
    */
   async getTodayAttendance({ salonId, userId }) {
@@ -118,6 +163,8 @@ class AttendanceService {
 
     return {
       attendance,
+      hasCheckedIn: !!attendance,
+      hasCheckedOut: !!(attendance && attendance.checkOutTime),
       salonLocation: salon
         ? {
             latitude: salon.latitude !== null && salon.latitude !== undefined ? Number(salon.latitude) : null,
@@ -130,10 +177,11 @@ class AttendanceService {
   }
 
   /**
-   * Lists attendance records for the salon with filtering and pagination.
+   * Lists attendance records for the salon with filtering, search and pagination.
+   * Strictly tenant-isolated to salonId.
    */
-  async listAttendance({ salonId, date, userId, status, page = 1, limit = 50 }) {
-    const query = { salonId };
+  async listAttendance({ salonId, date, userId, status, search, page = 1, limit = 50 }) {
+    const query = salonId ? { salonId } : {};
 
     if (date) {
       query.date = date;
@@ -145,12 +193,20 @@ class AttendanceService {
       query.status = status;
     }
 
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      const userFilter = salonId ? { salonId, $or: [{ name: searchRegex }, { email: searchRegex }] } : { $or: [{ name: searchRegex }, { email: searchRegex }] };
+      const matchedUsers = await User.find(userFilter).select('_id');
+      const userIds = matchedUsers.map((u) => u._id);
+      query.userId = { $in: userIds };
+    }
+
     const skip = (Math.max(1, parseInt(page, 10)) - 1) * Math.min(100, Math.max(1, parseInt(limit, 10)));
     const take = Math.min(100, Math.max(1, parseInt(limit, 10)));
 
     const [attendance, total] = await Promise.all([
       Attendance.find(query)
-        .sort({ checkInTime: -1 })
+        .sort({ checkInTime: -1, createdAt: -1 })
         .skip(skip)
         .limit(take)
         .populate('userId', 'name email'),
@@ -169,10 +225,38 @@ class AttendanceService {
    * Retrieves a single attendance record by ID strictly scoped to the tenant.
    */
   async getAttendanceById({ salonId, id }) {
-    const attendance = await Attendance.findOne({
-      _id: id,
-      salonId,
-    }).populate('userId', 'name email');
+    const query = { _id: id };
+    if (salonId) {
+      query.salonId = salonId;
+    }
+    const attendance = await Attendance.findOne(query).populate('userId', 'name email');
+
+    if (!attendance) {
+      const error = new Error('Attendance record not found.');
+      error.status = 404;
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    return attendance;
+  }
+
+  /**
+   * Deletes an attendance record strictly scoped to the tenant.
+   * Deleting resets the user's attendance status and allows checking in again.
+   *
+   * @param {Object} params
+   * @param {string} params.salonId - Authenticated salon ID
+   * @param {string} params.id - Attendance record ID
+   * @returns {Promise<Object>} The deleted attendance record
+   */
+  async deleteAttendance({ salonId, id }) {
+    const query = { _id: id };
+    if (salonId) {
+      query.salonId = salonId;
+    }
+
+    const attendance = await Attendance.findOneAndDelete(query);
 
     if (!attendance) {
       const error = new Error('Attendance record not found.');
